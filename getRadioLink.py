@@ -1,6 +1,6 @@
 #!/home/shmank/flaskServer/.venv/bin/python3
 import requests
-
+import json
 """
 Script Name: script.py
 Description: A clean, modular blueprint for writing Python scripts.
@@ -15,22 +15,31 @@ import json
 
 
 def get_stations(loc_id):
+    
+    radio_json = []
+
     try:
         response = requests.get('https://radio.garden/api/ara/content/page/' + loc_id)
         if response.status_code == 200:
             data = response.json()
             for channels in data['data']['content']:
-                print(channels['title'] + ": ")
+                
+                #print(channels['title'] + ": ")
                 for item in channels['items']:
                     if item['page']['type'] == "channel":
-                        print('Title: ' + item['page']['title'])
-                        print('Country: ' + item['page']['country']['title'])
-                        print('http://radio.garden/api/ara/content/listen/' + item['page']['url'].split("/")[-1] + '/channel.mp3')
+                        
+                        title = (item['page']['title'])
+                        country = (item['page']['country']['title'])
+                        url = ('http://radio.garden/api/ara/content/listen/' + item['page']['url'].split("/")[-1] + '/channel.mp3')
+                        
+                        radio_json.append({'title': title, 'country': country, 'url': url})
+            
+
         else:
             print(f"Failed to fetch data. Status code: {response.status_code}")
     except requests.exceptions.RequestException as e:
         print(f"A network error occurred: {e}")
-
+    return radio_json
 
 
 # helper for find_geo
@@ -65,7 +74,7 @@ def get_loc_id():
 		    # 52.28895497254308, 20.618328365871974	
 			loc_id = ((find_geo(data, [  20.618328365871974	, 52.28895497254308])))
 			print(loc_id)
-			print(get_stations(loc_id))
+			print(json.dumps(get_stations(loc_id)))
 			
 			#print(f"API Version: {data['apiVersion']}")
 			#print(f"size: {data['data']['list'][0]['size']}")
