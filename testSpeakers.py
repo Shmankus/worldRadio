@@ -2,7 +2,7 @@ import vlc
 import time
 import requests
 
-original_url = "https://radio.garden/api/ara/content/listen/z2Qm6PAt/channel.mp3"
+original_url = "http://radio.garden/api/ara/content/listen/ZMah3fCw/channel.mp3"
 
 # Resolve the redirect to get the actual stream URL
 resp = requests.head(original_url, allow_redirects=True, timeout=10)

@@ -1,7 +1,9 @@
 from flask import Flask, render_template, jsonify, request, send_from_directory
 import os, sys, threading, subprocess
 from werkzeug.utils import secure_filename
-
+import requests, math
+import vlc
+import time
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
 # Serve static files (JS, CSS, etc.)
@@ -14,6 +16,173 @@ def serve_static(filename):
 @app.route('/')
 def home():
     return render_template('index.html')
+
+
+
+
+
+    
+
+def get_stations(loc_id):
+    
+    radio_json = []
+
+    try:
+        response = requests.get('https://radio.garden/api/ara/content/page/' + loc_id)
+        if response.status_code == 200:
+            data = response.json()
+            for channels in data['data']['content']:
+                
+                #print(channels['title'] + ": ")
+                for item in channels['items']:
+                    if item['page']['type'] == "channel":
+                        
+                        title = (item['page']['title'])
+                        country = (item['page']['country']['title'])
+                        url = ('http://radio.garden/api/ara/content/listen/' + item['page']['url'].split("/")[-1] + '/channel.mp3')
+                        
+                        radio_json.append({'title': title, 'country': country, 'url': url})
+            
+
+        else:
+            print(f"Failed to fetch data. Status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"A network error occurred: {e}")
+    return radio_json
+
+
+# helper for find_geo
+def is_close(target_geo, given_geo):
+	closeness = .50
+	return math.dist(target_geo, given_geo) <= closeness
+
+# helper for get_loc_id
+def find_geo(json_obj, target_geo):
+    if isinstance(json_obj, dict):
+        if "geo" in json_obj and is_close(target_geo, json_obj["geo"]):
+            return json_obj["id"]
+        for value in json_obj.values():
+            result = find_geo(value, target_geo)
+            if result is not None:
+                return result
+    elif isinstance(json_obj, list):
+        for item in json_obj:
+            result = find_geo(item, target_geo)
+            if result is not None:
+                return result
+    return None
+
+
+
+# gets the id of the location
+def get_loc_id():
+
+	try:
+		response = requests.get('http://radio.garden/api/ara/content/places')
+    
+		if response.status_code == 200:
+			data = response.json()
+		    # 52.28895497254308, 20.618328365871974	
+			loc_id = ((find_geo(data, [  20.618328365871974	, 52.28895497254308])))
+			print(loc_id)
+			print(json.dumps(get_stations(loc_id)))
+			
+			#print(f"API Version: {data['apiVersion']}")
+			#print(f"size: {data['data']['list'][0]['size']}")
+		else:
+			print(f"Failed to fetch data. Status code: {response.status_code}")
+
+	except requests.exceptions.RequestException as e:
+		print(f"A network error occurred: {e}")
+
+
+
+@app.route('/get_radio_stations', methods=['POST'])
+def get_radio_stations():
+  data = request.get_json()
+  lat = data.get('lat')
+  lon = data.get('lon')
+  stations_json = []
+  try:
+    response = requests.get('http://radio.garden/api/ara/content/places')    
+    if response.status_code == 200:
+      data = response.json()
+		    # 52.28895497254308, 20.618328365871974	
+      loc_id = ((find_geo(data, [float(lon), float(lat)])))
+      print(loc_id)
+      stations_json = (get_stations(loc_id))		
+			#print(f"API Version: {data['apiVersion']}")
+			#print(f"size: {data['data']['list'][0]['size']}")
+    else:
+      print(f"Failed to fetch data. Status code: {response.status_code}")
+  except requests.exceptions.RequestException as e:
+    print(f"A network error occurred: {e}")
+  return jsonify({'status': '200, ok', 'stations_json': stations_json}), 200
+
+
+
+
+
+
+
+
+import threading
+
+current_player = None
+stop_flag = threading.Event()
+
+def play(url):
+    global current_player
+    stop_flag.clear()
+    try:
+        resp = requests.get(url, allow_redirects=True, timeout=10, stream=True)
+        resolved_url = resp.url
+        resp.close()
+        print(f"Resolved stream URL: {resolved_url}")
+        instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=plughw:1,0')
+        player = instance.media_player_new()
+        current_player = player
+        player.set_mrl(resolved_url)
+        player.play()
+        print("Streaming audio... Press Ctrl+C to stop.")
+        while not stop_flag.is_set():
+            time.sleep(1)
+            state = player.get_state()
+            print("VLC state:", state)
+            if state in [vlc.State.Ended, vlc.State.Error]:
+                break
+    except Exception as e:
+        print("Error in play():", e)
+    finally:
+        if current_player:
+            current_player.stop()
+        current_player = None
+
+@app.route('/play_station', methods=['POST'])
+def play_station():
+    stop_station()
+
+    data = request.get_json()
+    station_url = data.get('url')
+    radio_thread = threading.Thread(target=play, daemon=True, args=(str(station_url),))
+    radio_thread.start()
+    return jsonify({'status': '200, ok'}), 200
+
+@app.route('/stop_station', methods=['POST'])
+def stop_station():
+    stop_flag.set()
+    if current_player:
+        current_player.stop()
+    return jsonify({'status': '200, stopped'}), 200
+
+
+
+
+
+
+
+
+
 
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}

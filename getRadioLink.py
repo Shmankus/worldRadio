@@ -1,6 +1,6 @@
 #!/home/shmank/flaskServer/.venv/bin/python3
 import requests
-
+import json
 """
 Script Name: script.py
 Description: A clean, modular blueprint for writing Python scripts.
@@ -13,36 +13,38 @@ import os
 import math
 import json
 
-def get_first_station_stream(loc_id):
-	
-	try:
-		response = requests.get('https://radio.garden/api/ara/content/page/'+loc_id)
+
+def get_stations(loc_id):
     
-		if response.status_code == 200:
-			data = response.json()
-			
+    radio_json = []
 
+    try:
+        response = requests.get('https://radio.garden/api/ara/content/page/' + loc_id)
+        if response.status_code == 200:
+            data = response.json()
+            for channels in data['data']['content']:
+                
+                #print(channels['title'] + ": ")
+                for item in channels['items']:
+                    if item['page']['type'] == "channel":
+                        
+                        title = (item['page']['title'])
+                        country = (item['page']['country']['title'])
+                        url = ('http://radio.garden/api/ara/content/listen/' + item['page']['url'].split("/")[-1] + '/channel.mp3')
+                        
+                        radio_json.append({'title': title, 'country': country, 'url': url})
+            
 
-			for channels in data['data']['content']:	
-				print(channels['title'])
-				for item in channels['items']:
-					print(item['page']['url'])
-					
+        else:
+            print(f"Failed to fetch data. Status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        print(f"A network error occurred: {e}")
+    return radio_json
 
-			#return('http://radio.garden/api/ara/content/listen/' + data['data']['content'][3]['items'][1]['page']['url'].split("/")[-1] + '/channel.mp3' )
-
-
-			#print(f"API Version: {data['apiVersion']}")
-			#print(f"size: {data['data']['list'][0]['size']}")
-		else:
-			print(f"Failed to fetch data. Status code: {response.status_code}")
-
-	except requests.exceptions.RequestException as e:
-		print(f"A network error occurred: {e}")
 
 # helper for find_geo
 def is_close(target_geo, given_geo):
-	closeness = .05
+	closeness = .50
 	return math.dist(target_geo, given_geo) <= closeness
 
 # helper for get_loc_id
@@ -69,10 +71,10 @@ def get_loc_id():
     
 		if response.status_code == 200:
 			data = response.json()
-			
-			loc_id = ((find_geo(data, [ 5.12142, 52.090736])))
+		    # 52.28895497254308, 20.618328365871974	
+			loc_id = ((find_geo(data, [  20.618328365871974	, 52.28895497254308])))
 			print(loc_id)
-			print(get_first_station_stream(loc_id))
+			print(json.dumps(get_stations(loc_id)))
 			
 			#print(f"API Version: {data['apiVersion']}")
 			#print(f"size: {data['data']['list'][0]['size']}")
