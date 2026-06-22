@@ -4,8 +4,11 @@ from werkzeug.utils import secure_filename
 import requests, math
 import vlc
 import time
+from spin_image import start_display, start_spin, stop_spin, set_text, set_album_art
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
+current_player = None
+stop_flag = threading.Event()
 # Serve static files (JS, CSS, etc.)
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -126,34 +129,35 @@ def get_radio_stations():
 
 
 
-import threading
-
-current_player = None
-stop_flag = threading.Event()
-
-def play(url):
+def play(url, station_name=None, album_art_path=None):
     global current_player
     stop_flag.clear()
     try:
         resp = requests.get(url, allow_redirects=True, timeout=10, stream=True)
         resolved_url = resp.url
         resp.close()
-        print(f"Resolved stream URL: {resolved_url}")
+
         instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=plughw:1,0')
         player = instance.media_player_new()
         current_player = player
         player.set_mrl(resolved_url)
         player.play()
-        print("Streaming audio... Press Ctrl+C to stop.")
+
+        if album_art_path:
+            set_album_art(album_art_path)
+        set_text(station_name or "Now Playing")
+        start_spin()
+
         while not stop_flag.is_set():
             time.sleep(1)
             state = player.get_state()
-            print("VLC state:", state)
             if state in [vlc.State.Ended, vlc.State.Error]:
                 break
     except Exception as e:
         print("Error in play():", e)
     finally:
+        stop_spin()
+        set_text("Nothing Playing")
         if current_player:
             current_player.stop()
         current_player = None
@@ -161,22 +165,26 @@ def play(url):
 @app.route('/play_station', methods=['POST'])
 def play_station():
     stop_station()
-
     data = request.get_json()
     station_url = data.get('url')
-    radio_thread = threading.Thread(target=play, daemon=True, args=(str(station_url),))
+    station_name = data.get('title')
+    radio_thread = threading.Thread(
+        target=play,
+        daemon=True,
+        args=(str(station_url),),
+        kwargs={'station_name': station_name}
+    )
     radio_thread.start()
     return jsonify({'status': '200, ok'}), 200
 
 @app.route('/stop_station', methods=['POST'])
 def stop_station():
     stop_flag.set()
+    stop_spin()
+    set_text("Nothing Playing")
     if current_player:
         current_player.stop()
     return jsonify({'status': '200, stopped'}), 200
-
-
-
 
 
 
@@ -331,6 +339,8 @@ def startService():
 
 
 
-if __name__ == '__main__':
-    # Start the local development server
-    app.run(host='0.0.0.0', port=8000, debug=True)
+if __name__ == "__main__":
+    start_display()  # screen comes alive as soon as Flask starts
+    set_album_art("uploads/vynil.png")  # default art shown even when idle
+    app.run(host='0.0.0.0', port=8000, debug=True, use_reloader=False)
+
