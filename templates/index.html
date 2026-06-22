@@ -1,516 +1,213 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="module" src="serviceCard.js"></script>
-
-
-    <!-- 1. Include Leaflet.js CSS for Map Styling -->
-  <link rel="stylesheet" href="https://unpkg.com" />
-
-
-    <title>Image Dashboard</title>
-
-
-<style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
+  <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.8.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script><!-- <script type="module" src="serviceCard.js"></script> -->
+  <!-- Leaflet.js CSS for Map Styling -->
+  <link rel="stylesheet" href="https://unpkg.com">
+  <title>Image Dashboard</title>
+  <style>
+  body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+  }
     .form-container {
-      max-width: 600px;
-      margin-bottom: 20px;
+            max-width: 600px;
+            margin-bottom: 20px;
     }
     .input-group {
-      margin-bottom: 15px;
+            margin-bottom: 15px;
     }
     label {
-      display: block;
-      margin-bottom: 5px;
-      font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
     }
     input[type="text"] {
-      width: 100%;
-      padding: 8px;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
     }
     /* 2. Critical: The map container MUST have a defined height */
     #map {
-      height: 400px;
-      width: 100%;
-      max-width: 600px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+            height: 400px;
+            width: 100%;
+            max-width: 600px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
     }
     button {
-      padding: 10px 15px;
-      background-color: #007BFF;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
     }
     button:hover {
-      background-color: #0056b3;
+            background-color: #0056b3;
     }
   </style>
-
-
-
-
 </head>
 <body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen py-8">
-    <div class="max-w-4xl mx-auto px-4">
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        <!-- Radio Section -->
-        <div class="bg-slate-800 rounded-lg shadow-lg p-6 mb-6">
-                    
-            <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span class="text-2xl"></span> Radio
-            </h2>
-
-  <form id="locationForm" class="form-container">
-    <div class="input-group">
-      <label for="latitude">Latitude</label>
-      <input type="text" id="latitude" name="latitude" readonly placeholder="Click map to select">
+  <div class="max-w-4xl mx-auto px-4">
+    <!-- Radio Section -->
+    <div class="bg-slate-800 rounded-lg shadow-lg p-6 mb-6">
+      <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">Radio</h2>
+      <form id="locationForm" class="form-container" name="locationForm">
+        <div class="input-group">
+          <label for="latitude">Latitude</label> <input type="text" id="latitude" name="latitude" readonly placeholder="Click map to select">
+        </div>
+        <div class="input-group">
+          <label for="longitude">Longitude</label> <input type="text" id="longitude" name="longitude" readonly placeholder="Click map to select">
+        </div><button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="submit">Search Stations</button>
+      </form>
+      <div id="map"></div>
+      <form id="stationSelectForm" class="space-y-4" name="stationSelectForm">
+        <div>
+          <label for="stationName" class="block text-slate-300 font-medium mb-2">Select Station</label>
+          <div id="selectableStations">
+            <select id="selectedStation" name="stations">
+            </select>
+          </div>
+        </div>
+        <div class="flex gap-3">
+          <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition">Play Station</button> <button type="button" id="stopStation" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition">Stop</button>
+        </div>
+      </form>
     </div>
-
-    <div class="input-group">
-      <label for="longitude">Longitude</label>
-      <input type="text" id="longitude" name="longitude" readonly placeholder="Click map to select">
-    </div>
-
-    <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="submit">Search Stations</button>
-  </form>
-
-<div id="map"></div>
-
-            <form id="stationSelectForm" class="space-y-4">
-                <div>
-                    <label for="stationName" class="block text-slate-300 font-medium mb-2">
-                        Select Station
-                    </label>
-	<div id="selectableStations">
-                <select id="selectedStation" name="stations">
-
-  		</select>
-	</div>
-                </div>
-                <div class="flex gap-3">
-                    <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition">
-                        Play Station
-                    </button>
-                    <button type="button" id="stopStation" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition">
-                        Stop
-                    </button>
-                </div>
-            </form>
-	</div>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        <!-- Upload Section -->
-        <div class="bg-slate-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span class="text-2xl"></span> Upload Image
-            </h2>
-            <form id="imageForm" enctype="multipart/form-data" class="space-y-4">
-                <div>
-                    <label for="imageUpload" class="block text-slate-300 font-medium mb-2">
-                        Choose an image to upload:
-                    </label>
-                    <input
-                        type="file"
-                        id="imageUpload"
-                        name="my_file"
-                        accept="image/png, image/jpeg, image/webp, image/gif"
-                        class="block w-full text-slate-300 bg-slate-700 border border-slate-600 rounded p-2 hover:border-slate-500 transition"
-                        required
-                    >
-                </div>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition">
-                    Upload Image
-                </button>
-            </form>
-            <div id="imageResult" class="mt-4 p-3 rounded bg-green-900 text-green-200 hidden"></div>
-        </div>
-
-        <!-- Current Files Section -->
-        
-
-<!--	<div class="bg-slate-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span class="text-2xl">📁</span> Saved Images
-            </h2>
-            <div id="savedImages" class="bg-slate-700 rounded p-4 max-h-48 overflow-y-auto">
-                <p class="text-slate-400">Loading images...</p>
-            </div>
-        </div>
-
-
-
-
-	
-
-
-        <!-- Display Image Section -->
-        <div class="bg-slate-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-                <span class="text-2xl"></span> Display Image
-            </h2>
-            <form id="imageNameForm" class="space-y-4">
-                <div>
-                    <label for="imgName" class="block text-slate-300 font-medium mb-2">
-                        Select File
-                    </label>
-	<div id="selectableFiles">
-                <select id="selectedFile" name="files">
-
-  		</select>
-	</div>
-                </div>
-                <div class="flex gap-3">
-                    <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition">
-                        Display
-                    </button>
-                    <button type="button" id="killBtn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition">
-                        Stop
-                    </button>
-                </div>
-            </form>
-            <div id="imageNameStatus" class="mt-4 p-3 rounded bg-green-900 text-green-200 hidden"></div>
-        </div>
-
-        <!-- Service Management Section -->
-        <div class="bg-slate-800 rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                <span class="text-2xl"></span> Service Management
-            </h2>
-
-            <!-- Grid layout for forms -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-
-	<div id="services">
-
-	</div>
-
-
-        </div>
-
-
-
-    </div>
-
-
-    <!-- Radio and Map logic -->    
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  </div><!-- Radio and Map logic -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> 
   <script>
-    // 4. Initialize Map (Centered globally or at default coordinates)
-    // Format: [Latitude, Longitude], Zoom Level
-    const defaultLocation = [40.7128, -74.0060]; // New York City default
-    const map = L.map('map').setView(defaultLocation, 13);
 
-    // 5. Load Map Tiles from OpenStreetMap (Free alternative to Google Maps)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+                                                // 4. Initialize Map (Centered globally or at default coordinates)
+                                                // Format: [Latitude, Longitude], Zoom Level
+                                                const defaultLocation = [40.7128, -74.0060]; // New York City default
+                                                const map = L.map('map').setView(defaultLocation, 13);
 
-    // 6. Create a Draggable Marker at the default location
-    let marker = L.marker(defaultLocation, {
-      draggable: true
-    }).addTo(map);
+                                                // 5. Load Map Tiles from OpenStreetMap (Free alternative to Google Maps)
+                                                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                                        maxZoom: 19,
+                                                        attribution: '© OpenStreetMap contributors'
+                                                }).addTo(map);
 
-    // Grab form input elements
-    const latInput = document.getElementById('latitude');
-    const lngInput = document.getElementById('longitude');
+                                                // 6. Create a Draggable Marker at the default location
+                                                let marker = L.marker(defaultLocation, {
+                                                        draggable: true
+                                                }).addTo(map);
 
-    // 7. Function to update input fields
-    function updateInputs(lat, lng) {
-      // .toFixed(6) limits decimal places for clean storage
-      latInput.value = lat.toFixed(6);
-      lngInput.value = (((lng + 180) % 360 + 360) % 360 - 180).toFixed(6);
-    }
+                                                // Grab form input elements
+                                                const latInput = document.getElementById('latitude');
+                                                const lngInput = document.getElementById('longitude');
 
-    // Populate inputs initially with default coordinates
-    updateInputs(defaultLocation[0], defaultLocation[1]);
+                                                // 7. Function to update input fields
+                                                function updateInputs(lat, lng) {
+                                                        // .toFixed(6) limits decimal places for clean storage
+                                                        latInput.value = lat.toFixed(6);
+                                                        lngInput.value = (((lng + 180) % 360 + 360) % 360 - 180).toFixed(6);
+                                                }
 
-    // 8. Event Listener: Map Click (Move marker and update fields)
-    map.on('click', function(e) {
-      const lat = e.latlng.lat;
-      const lng = e.latlng.lng;
-      
-      marker.setLatLng(e.latlng); // Move marker to clicked spot
-      updateInputs(lat, lng);
-    });
+                                                // Populate inputs initially with default coordinates
+                                                updateInputs(defaultLocation[0], defaultLocation[1]);
 
-    // 9. Event Listener: Marker Drag (Update fields after drag finishes)
-    marker.on('dragend', function(e) {
-      const position = marker.getLatLng();
-      updateInputs(position.lat, position.lng);
-    });
+                                                // 8. Event Listener: Map Click (Move marker and update fields)
+                                                map.on('click', function(e) {
+                                                        const lat = e.latlng.lat;
+                                                        const lng = e.latlng.lng;
 
-    // Handle Form Submission
-    document.getElementById('locationForm').addEventListener('submit', async (e) => {
-      	e.preventDefault();
-      
-	
-            
-            try {
-                const response = await fetch(`http://192.168.86.29:8000/get_radio_stations`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 'lat':latInput.value , 'lon':lngInput.value })
-                });
-                const data = await response.json();
-                console.log(data.status, data.stations_json);
+                                                        marker.setLatLng(e.latlng); // Move marker to clicked spot
+                                                        updateInputs(lat, lng);
+                                                });
 
-		
+                                                // 9. Event Listener: Marker Drag (Update fields after drag finishes)
+                                                marker.on('dragend', function(e) {
+                                                        const position = marker.getLatLng();
+                                                        updateInputs(position.lat, position.lng);
+                                                });
 
-                    const container = document.getElementById('selectedStation');
-                    if (data.stations_json && data.stations_json.length > 0) {
-                        container.innerHTML = data.stations_json
-                            .map(station => `<option value="${station.url}">${station.title}</option>`)
-                            .join('');
-                    } else {
-                        container.innerHTML = '<p class="text-slate-400">No images uploaded yet</p>';
-                    }
-
-
-            } catch (error) {
-		    console.log(JSON.stringify(error.message));
-            }
-
-	
-	
-    });
+                                                // Handle Form Submission
+                                                document.getElementById('locationForm').addEventListener('submit', async (e) => {
+                                                        e.preventDefault();
 
 
 
-
-        document.getElementById('stationSelectForm').addEventListener('submit', async (e) => {
-		e.preventDefault();
-            try {
-		console.log(selectedStation.value)
-
-		
-
-                const response = await fetch(`http://192.168.86.29:8000/play_station`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({'title': 'test', 'url' : selectedStation.value})
-                });
-                //const data = await response.json();
-                //console.log(data.status);
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        });
+                                                        try {
+                                                                const response = await fetch(`http://192.168.86.29:8000/get_radio_stations`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({ 'lat':latInput.value , 'lon':lngInput.value })
+                                                                });
+                                                                const data = await response.json();
+                                                                console.log(data.status, data.stations_json);
 
 
-        document.getElementById('stopStation').addEventListener('click', async () => {
-            try {
-                const response = await fetch(`http://192.168.86.29:8000/stop_station`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-                console.log(data.status);
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        });
+
+                                                                const container = document.getElementById('selectedStation');
+                                                                if (data.stations_json && data.stations_json.length > 0) {
+                                                                        container.innerHTML = data.stations_json
+                                                                                .map(station => `<option value="${station.url}" title="${station.title}" data-country="${station.country}">${station.title}</option>`)
+                                                                                .join('');
+                                                                } else {
+                                                                        container.innerHTML = '<p class="text-slate-400">No images uploaded yet</p>';
+                                                                }
+
+
+                                                        } catch (error) {
+                                                                console.log(JSON.stringify(error.message));
+                                                        }
+
+
+
+                                                });
+
+
+
+
+                                                document.getElementById('stationSelectForm').addEventListener('submit', async (e) => {
+                                                        e.preventDefault();
+                                                        try {
+                                                                console.log(selectedStation.value)
+
+                                                                const selectedOption = selectedStation.options[selectedStation.selectedIndex];
+
+                                                                const response = await fetch(`http://192.168.86.29:8000/play_station`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' },
+                                                                        body: JSON.stringify({
+                                                                                // This pulls the text inside the <option> tag (e.g., "RADIO538")
+                                                                                'title': selectedOption.text,
+                                                                                'country' : selectedOption.dataset.country,
+                                                                                'url': selectedStation.value
+                                                                        })
+                                                                });
+
+                                                                //const data = await response.json();
+                                                                //console.log(data.status);
+                                                        } catch (error) {
+                                                                console.error('Error:', error);
+                                                        }
+                                                });
+
+
+                                                document.getElementById('stopStation').addEventListener('click', async () => {
+                                                        try {
+                                                                const response = await fetch(`http://192.168.86.29:8000/stop_station`, {
+                                                                        method: 'POST',
+                                                                        headers: { 'Content-Type': 'application/json' }
+                                                                });
+                                                                const data = await response.json();
+                                                                console.log(data.status);
+                                                        } catch (error) {
+                                                                console.error('Error:', error);
+                                                        }
+                                                });
 
 
   </script>
-
-
-  <!-- Other logic -->
-    <script>
-	const services = ["dashboard"];
-
-        const listContainer = document.getElementById("services");
-        let htmlContent = "";
-
-        // Loop to generate service cards
-        services.forEach(item => {
-            htmlContent += `<service-card service="${item}"></service-card>`;
-        });
-
-        // Inject the generated string into the DOM
-        listContainer.innerHTML = htmlContent;	
-
-
-
-	
-
-
-
-        const API_BASE = "http://192.168.86.29:8000";
-
-        function showStatus(elementId, message, isError = false) {
-            const el = document.getElementById(elementId);
-            el.textContent = message;
-            el.classList.remove('hidden');
-            if (isError) {
-                el.classList.add('bg-red-900', 'text-red-200');
-                el.classList.remove('bg-green-900', 'text-green-200');
-            } else {
-                el.classList.add('bg-green-900', 'text-green-200');
-                el.classList.remove('bg-red-900', 'text-red-200');
-            }
-        }
-
-        function fetchImages() {
-            fetch(`${API_BASE}/getImages`)
-                .then(response => response.json())
-                .then(data => {
-                    const container = document.getElementById('selectedFile');
-                    if (data.files && data.files.length > 0) {
-                        container.innerHTML = data.files
-                            .map(file => `<option value="${file}">${file}</option>`)
-                            .join('');
-                    } else {
-                        container.innerHTML = '<p class="text-slate-400">No images uploaded yet</p>';
-                    }
-                })
-                .catch(error => console.error('Error:', error));
-        }
-
-        // Upload Image
-        document.getElementById('imageForm').addEventListener('submit', function(event) {
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            fetch(`${API_BASE}/upload`, { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    showStatus('imageResult', data.status);
-                    fetchImages();
-                    this.reset();
-                })
-                .catch(error => showStatus('imageResult', `Error: ${error.message}`, true));
-        });
-
-        // Display Image
-        document.getElementById('imageNameForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const imageName = document.getElementById('selectedFile').value;
-            const imagePath = `/root/flaskServer/uploads/${imageName}`;
-            try {
-                const response = await fetch(`${API_BASE}/displayImage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ imagePath })
-                });
-                const data = await response.json();
-                showStatus('imageNameStatus', `✓ ${data.status}`);
-                //document.getElementById('selectedFile').value = '';
-            } catch (error) {
-                showStatus('imageNameStatus', `Error: ${error.message}`, true);
-            }
-        });
-
-        // Kill Display
-        document.getElementById('killBtn').addEventListener('click', async () => {
-            try {
-                const response = await fetch(`${API_BASE}/killDisplay`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                const data = await response.json();
-                console.log(data.status);
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        });
-
-
-/**
-        // Check Service
-        document.getElementById('serviceStatusForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const serviceName = document.getElementById('serviceStatusName').value;
-            try {
-                const response = await fetch(`${API_BASE}/checkService`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ serviceName })
-                });
-                const data = await response.json();
-                showStatus('serviceStatus', `${serviceName} running? ${data.isRunning}`);
-            } catch (error) {
-                showStatus('serviceStatus', `Error: ${error.message}`, true);
-            }
-        });
-
-        // Stop Service
-        document.getElementById('serviceStopForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const serviceName = document.getElementById('serviceStopName').value;
-            try {
-                const response = await fetch(`${API_BASE}/stopService`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ serviceName })
-                });
-                const data = await response.json();
-                showStatus('serviceStatus', `${serviceName} stopped. Running? ${data.isRunning}`);
-            } catch (error) {
-                showStatus('serviceStatus', `Error: ${error.message}`, true);
-            }
-        });
-
-        // Start Service
-        document.getElementById('serviceStartForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const serviceName = document.getElementById('serviceStartName').value;
-            try {
-                const response = await fetch(`${API_BASE}/startService`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ serviceName })
-                });
-                const data = await response.json();
-                showStatus('serviceStatus', `${serviceName} started. Running? ${data.isRunning}`);
-            } catch (error) {
-                showStatus('serviceStatus', `Error: ${error.message}`, true);
-            }
-        });
-
-*/
-
-        // Initial load
-        fetchImages();
-    </script>
 </body>
 </html>

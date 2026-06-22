@@ -11,8 +11,11 @@ FB_PATH = "/dev/fb1"
 DARK_RED = (80, 0, 0)
 TEXT_COLOR = (255, 255, 255)
 
-current_text = "Nothing Playing"
-text_lock = threading.Lock()
+title_text = "Nothing Playing"
+title_lock = threading.Lock()
+country_text = "No Country"
+country_lock = threading.Lock()
+
 
 is_spinning = threading.Event()   # set() = actively spin the image, clear() = show idle/static frame
 _display_thread = None
@@ -22,10 +25,13 @@ base_img = None
 album_art_path = None
 art_lock = threading.Lock()
 
-def set_text(new_text):
-    global current_text
-    with text_lock:
-        current_text = new_text
+def set_text(new_title, new_country):
+    global title_text
+    global country_text
+    with title_lock:
+        title_text = new_title
+    with country_lock:
+        country_text = new_country
 
 def set_album_art(image_path):
     """Change which image is displayed/spun."""
@@ -47,10 +53,10 @@ def load_font(size=20):
     except IOError:
         return ImageFont.load_default()
 
-def _display_loop(fps=20, degrees_per_frame=6):
+def _display_loop(fps=10, degrees_per_frame=6):
     text_zone_height = FB_HEIGHT // 3
     image_zone_height = FB_HEIGHT - text_zone_height
-    font = load_font(20)
+    font = load_font(10)
     angle = 0
     frame_delay = 1.0 / fps
 
@@ -63,12 +69,22 @@ def _display_loop(fps=20, degrees_per_frame=6):
             canvas_img = Image.new('RGB', (FB_WIDTH, FB_HEIGHT), DARK_RED)
             draw = ImageDraw.Draw(canvas_img)
 
-            with text_lock:
-                text = current_text
+            with title_lock:
+                text = title_text
             bbox = draw.textbbox((0, 0), text, font=font)
             text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
             draw.text(((FB_WIDTH - text_w) // 2, (text_zone_height - text_h) // 2),
-                       text, font=font, fill=TEXT_COLOR)
+                    text, font=font, fill=TEXT_COLOR)
+
+
+
+            with country_lock:
+                text = country_text
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            draw.text((((FB_WIDTH - text_w) // 2), ((text_zone_height - text_h) // 2) + 10),
+                    text, font=font, fill=TEXT_COLOR)
+
 
             with art_lock:
                 img = base_img

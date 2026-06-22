@@ -129,7 +129,7 @@ def get_radio_stations():
 
 
 
-def play(url, station_name=None, album_art_path=None):
+def play(url, station_name=None,station_country=None, album_art_path=None):
     global current_player
     stop_flag.clear()
     try:
@@ -137,7 +137,7 @@ def play(url, station_name=None, album_art_path=None):
         resolved_url = resp.url
         resp.close()
 
-        instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=plughw:1,0')
+        instance = vlc.Instance('--aout=alsa')
         player = instance.media_player_new()
         current_player = player
         player.set_mrl(resolved_url)
@@ -145,7 +145,7 @@ def play(url, station_name=None, album_art_path=None):
 
         if album_art_path:
             set_album_art(album_art_path)
-        set_text(station_name or "Now Playing")
+        set_text(station_name, station_country)
         start_spin()
 
         while not stop_flag.is_set():
@@ -157,7 +157,7 @@ def play(url, station_name=None, album_art_path=None):
         print("Error in play():", e)
     finally:
         stop_spin()
-        set_text("Nothing Playing")
+        set_text("Nothing Playing","No Country")
         if current_player:
             current_player.stop()
         current_player = None
@@ -168,11 +168,12 @@ def play_station():
     data = request.get_json()
     station_url = data.get('url')
     station_name = data.get('title')
+    station_country = data.get('country')
     radio_thread = threading.Thread(
         target=play,
         daemon=True,
         args=(str(station_url),),
-        kwargs={'station_name': station_name}
+        kwargs={'station_name': station_name, 'station_country':station_country}
     )
     radio_thread.start()
     return jsonify({'status': '200, ok'}), 200
@@ -181,7 +182,7 @@ def play_station():
 def stop_station():
     stop_flag.set()
     stop_spin()
-    set_text("Nothing Playing")
+    set_text("Nothing Playing", "No Country")
     if current_player:
         current_player.stop()
     return jsonify({'status': '200, stopped'}), 200
@@ -191,7 +192,7 @@ def stop_station():
 
 
 
-
+"""
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
@@ -337,7 +338,7 @@ def startService():
     except Exception as e:
         return jsonify({"status": f"555 - {str(e)}"}), 500
 
-
+"""
 
 if __name__ == "__main__":
     start_display()  # screen comes alive as soon as Flask starts
