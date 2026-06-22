@@ -139,7 +139,7 @@ def play(url):
         resolved_url = resp.url
         resp.close()
         print(f"Resolved stream URL: {resolved_url}")
-        instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=plughw:1,0')
+        instance = vlc.Instance('--aout=alsa')
         player = instance.media_player_new()
         current_player = player
         player.set_mrl(resolved_url)
