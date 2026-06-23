@@ -150,7 +150,7 @@
                                                                 const container = document.getElementById('selectedStation');
                                                                 if (data.stations_json && data.stations_json.length > 0) {
                                                                         container.innerHTML = data.stations_json
-                                                                                .map(station => `<option value="${station.url}" title="${station.title}" data-country="${station.country}">${station.title}</option>`)
+                                                                                .map(station => `<option value="${station.url}" title="${station.title}" data-country="${station.country}" data-utcoffset="${station.utcOffset}">${station.title}</option>`)
                                                                                 .join('');
                                                                 } else {
                                                                         container.innerHTML = '<p class="text-slate-400">No images uploaded yet</p>';
@@ -182,7 +182,8 @@
                                                                                 // This pulls the text inside the <option> tag (e.g., "RADIO538")
                                                                                 'title': selectedOption.text,
                                                                                 'country' : selectedOption.dataset.country,
-                                                                                'url': selectedStation.value
+                                                                                'url': selectedStation.value,
+                                                                                'time_offset' : selectedOption.dataset.utcoffset
                                                                         })
                                                                 });
 

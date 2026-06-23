@@ -4,7 +4,7 @@ from werkzeug.utils import secure_filename
 import requests, math
 import vlc
 import time
-from spin_image import start_display, start_spin, stop_spin, set_text, set_album_art
+from draw_screen import start_display, start_spin, stop_spin, set_text, set_album_art
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
 current_player = None
@@ -34,6 +34,7 @@ def get_stations(loc_id):
         response = requests.get('https://radio.garden/api/ara/content/page/' + loc_id)
         if response.status_code == 200:
             data = response.json()
+            utc_offset = (data['data']['utcOffset']) 
             for channels in data['data']['content']:
                 
                 #print(channels['title'] + ": ")
@@ -43,8 +44,7 @@ def get_stations(loc_id):
                         title = (item['page']['title'])
                         country = (item['page']['country']['title'])
                         url = ('http://radio.garden/api/ara/content/listen/' + item['page']['url'].split("/")[-1] + '/channel.mp3')
-                        
-                        radio_json.append({'title': title, 'country': country, 'url': url})
+                        radio_json.append({'title': title, 'country': country,'utcOffset': utc_offset, 'url': url})
             
 
         else:
@@ -60,7 +60,7 @@ def is_close(target_geo, given_geo):
 	return math.dist(target_geo, given_geo) <= closeness
 
 # helper for get_loc_id
-def find_geo(json_obj, target_geo):
+def find_geo_old(json_obj, target_geo):
     if isinstance(json_obj, dict):
         if "geo" in json_obj and is_close(target_geo, json_obj["geo"]):
             return json_obj["id"]
@@ -75,7 +75,33 @@ def find_geo(json_obj, target_geo):
                 return result
     return None
 
+def _geo_distance(geo1, geo2):
+    """Euclidean distance between two geo points (dict or sequence)."""
+    if isinstance(geo1, dict):
+        return math.hypot(geo1["lat"] - geo2["lat"], geo1["lon"] - geo2["lon"])
+    return math.hypot(geo1[0] - geo2[0], geo1[1] - geo2[1])
 
+
+def _collect_candidates(json_obj, candidates):
+    """Recursively gather all (id, geo) pairs from the JSON structure."""
+    if isinstance(json_obj, dict):
+        if "geo" in json_obj and "id" in json_obj:
+            candidates.append((json_obj["id"], json_obj["geo"]))
+        for value in json_obj.values():
+            _collect_candidates(value, candidates)
+    elif isinstance(json_obj, list):
+        for item in json_obj:
+            _collect_candidates(item, candidates)
+
+
+def find_geo(json_obj, target_geo):
+    candidates = []
+    _collect_candidates(json_obj, candidates)
+
+    if not candidates:
+        return None
+
+    return min(candidates, key=lambda c: _geo_distance(target_geo, c[1]))[0]
 
 # gets the id of the location
 def get_loc_id():
@@ -126,10 +152,7 @@ def get_radio_stations():
 
 
 
-
-
-
-def play(url, station_name=None,station_country=None, album_art_path=None):
+def play(url, station_name=None, station_country=None, time_offset=None, album_art_path="uploads/vinyl.gif"):
     global current_player
     stop_flag.clear()
     try:
@@ -137,19 +160,17 @@ def play(url, station_name=None,station_country=None, album_art_path=None):
         resolved_url = resp.url
         resp.close()
 
-        instance = vlc.Instance('--aout=alsa')
+        instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=plughw:Headphones,0')
         player = instance.media_player_new()
         current_player = player
         player.set_mrl(resolved_url)
         player.play()
 
-        if album_art_path:
-            set_album_art(album_art_path)
-        set_text(station_name, station_country)
+        set_text(station_name or "Now Playing", station_country or "", time_offset or 0)
         start_spin()
 
         while not stop_flag.is_set():
-            time.sleep(1)
+            time.sleep(0.1)
             state = player.get_state()
             if state in [vlc.State.Ended, vlc.State.Error]:
                 break
@@ -157,10 +178,11 @@ def play(url, station_name=None,station_country=None, album_art_path=None):
         print("Error in play():", e)
     finally:
         stop_spin()
-        set_text("Nothing Playing","No Country")
+        set_text("Nothing Playing", "No Country", 0)  # only runs when actually stopping
         if current_player:
             current_player.stop()
         current_player = None
+
 
 @app.route('/play_station', methods=['POST'])
 def play_station():
@@ -169,11 +191,12 @@ def play_station():
     station_url = data.get('url')
     station_name = data.get('title')
     station_country = data.get('country')
+    time_offset = data.get('time_offset')
     radio_thread = threading.Thread(
         target=play,
         daemon=True,
         args=(str(station_url),),
-        kwargs={'station_name': station_name, 'station_country':station_country}
+        kwargs={'station_name': station_name, 'station_country':station_country, 'time_offset': time_offset}
     )
     radio_thread.start()
     return jsonify({'status': '200, ok'}), 200
@@ -181,13 +204,11 @@ def play_station():
 @app.route('/stop_station', methods=['POST'])
 def stop_station():
     stop_flag.set()
-    stop_spin()
-    set_text("Nothing Playing", "No Country")
     if current_player:
         current_player.stop()
+    # removed set_text here — play() will set it, and if genuinely stopping
+    # without replaying, play()'s finally block handles the reset
     return jsonify({'status': '200, stopped'}), 200
-
-
 
 
 
@@ -342,6 +363,6 @@ def startService():
 
 if __name__ == "__main__":
     start_display()  # screen comes alive as soon as Flask starts
-    set_album_art("uploads/vynil.png")  # default art shown even when idle
+    set_album_art("uploads/vinyl.gif")  # default art shown even when idle
     app.run(host='0.0.0.0', port=8000, debug=True, use_reloader=False)
 
