@@ -1,4 +1,4 @@
-https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.8.0">
@@ -14,7 +14,7 @@ https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCT
         margin: 20px;
   }
     .form-container {
-            max-width: 100%;
+            max-width: 600px;
             margin-bottom: 20px;
     }
     .input-group {
@@ -36,7 +36,7 @@ https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCT
     #map {
             height: 400px;
             width: 100%;
-            max-width: 100%;
+            max-width: 600px;
             border: 1px solid #ccc;
             border-radius: 4px;
     }
@@ -76,12 +76,7 @@ https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCT
           </div>
         </div>
         <div class="flex gap-3">
-          <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition">Play Station</button> 
-          <button type="button" id="stopStation" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition">Stop</button>
-        
-          <button type="button" id="saveStation" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition">Save</button>
-
-          <button type="button" id="removeStation" class="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded transition">Remove</button>
+          <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded transition">Play Station</button> <button type="button" id="stopStation" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition">Stop</button>
         </div>
       </form>
     </div>
@@ -181,7 +176,7 @@ https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCT
                                                                 const selectedOption = selectedStation.options[selectedStation.selectedIndex];
 
                                                                 const response = await fetch(`http://192.168.86.29:8000/play_station`, {
-                                                                        method: 'POST',
+                                                                        method: 'POST',c
                                                                         headers: { 'Content-Type': 'application/json' },
                                                                         body: JSON.stringify({
                                                                                 // This pulls the text inside the <option> tag (e.g., "RADIO538")
