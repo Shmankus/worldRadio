@@ -159,8 +159,8 @@ def play(url, station_name=None, station_country=None, time_offset=None, album_a
         resp = requests.get(url, allow_redirects=True, timeout=10, stream=True)
         resolved_url = resp.url
         resp.close()
-
-        instance = vlc.Instance('--aout=alsa', '--alsa-audio-device=plughw:Headphones,0')
+        print(f"Resolved stream URL: {resolved_url}")
+        instance = vlc.Instance('--aout=alsa')
         player = instance.media_player_new()
         current_player = player
         player.set_mrl(resolved_url)
