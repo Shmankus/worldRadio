@@ -210,7 +210,14 @@ def stop_station():
     # without replaying, play()'s finally block handles the reset
     return jsonify({'status': '200, stopped'}), 200
 
+@app.route('/add_to_saved', methods=['POST'])
+def add_to_saved():
+    return jsonify({'status': '200, stopped'}), 200
 
+
+@app.route('/remove_from_saved', methods=['POST'])
+def remove_from_saved():
+    return jsonify({'status': '200, stopped'}), 200
 
 
 """
