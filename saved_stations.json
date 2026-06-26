@@ -1,8 +1,14 @@
 {
     "saved_stations": [
         {
-            "url": "http://radio.garden/api/ara/content/listen/cok0vuDC/channel.mp3",
-            "title": "MDR Sputnik",
+            "url": "http://radio.garden/api/ara/content/listen/1vlrqH6v/channel.mp3",
+            "title": "Smooth Jazz 24/7",
+            "country": "United States\n                        ",
+            "time_offset": "-240"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/rln9igT1/channel.mp3",
+            "title": "Radio Chemnitz - Freitag Nacht",
             "country": "Germany\n                        ",
             "time_offset": "120"
         }

@@ -67,9 +67,9 @@
         </div>
             <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="submit">Search Stations</button>
      
-            <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="searchRandom">Random</button>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="button" id="searchRandom">Random</button>
      </form>
-      <div id="map"></div>
+      <div class = 'bg-black' id="map"></div>
       <form id="stationSelectForm" class="space-y-4" name="stationSelectForm">
         <div>
           <label for="stationName" class="block text-slate-300 font-medium mb-2">Select Station</label>
@@ -103,11 +103,11 @@
     const map = L.map('map').setView(defaultLocation, 13);
 
     // 5. Load Map Tiles from OpenStreetMap (Free alternative to Google Maps)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd',
+    maxZoom: 20,
+    minZoom: 1
+}).addTo(map);
     // 6. Create a Draggable Marker at the default location
     let marker = L.marker(defaultLocation, {
         draggable: true
@@ -170,6 +170,41 @@
         }
 
     });
+
+
+
+    // random station finder
+    
+    /**
+        Finds a random station and returns it
+        
+        Type : onClick 
+         
+        Method : POST
+    
+        Sends title, country, url and time_offset to Flask
+    */
+    document.getElementById('searchRandom').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            const response = await fetch(`http://192.168.86.29:8000/search_random`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                })
+            const data = await response.json();
+            console.log("randomSearch",data.status)
+            console.log("randomSearch", data.debug)
+            console.log(data.stations_geo);
+            refreshStations(data.new_stations);
+            
+            // update map 
+            updateInputs(data.stations_geo[1], data.stations_geo[0]); 
+            marker.setLatLng([data.stations_geo[1], data.stations_geo[0]]);
+            map.setView([data.stations_geo[1], data.stations_geo[0]], map.zoom);
+        } catch (error) {
+                console.error('Error:', error);
+                            }
+       });
 
 
 /* Bottom row buttons */

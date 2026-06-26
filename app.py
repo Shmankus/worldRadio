@@ -16,6 +16,12 @@ found_radio_stations = []
 saved_radio_stations = []
 
 """ HELPER FUNCTIONS """
+
+
+
+
+
+
 def get_stations(loc_id):
     """
         Gets all of the stations through a fetch to the radio garden API
@@ -168,7 +174,7 @@ def compile_new_stations():
 
 """ FLASK ROUTES """
 
-
+import random
 # Serve static files (JS, CSS, etc.)
 @app.route('/<path:filename>')
 def serve_static(filename):
@@ -180,6 +186,32 @@ def serve_static(filename):
 @app.route('/')
 def home():
     return render_template('index.html')
+
+@app.route('/search_random', methods=['POST'])
+def search_random():
+    stations_json = []
+    
+    try: 
+        response = requests.get('http://radio.garden/api/ara/content/places')   
+        if response.status_code == 200:
+            data = response.json()
+            list_length = len(data['data']['list'])
+            station_index = random.randint(0,list_length-1)
+            
+            station_code = data['data']['list'][station_index]['id']
+            station_geo = data['data']['list'][station_index]['geo']  
+            stations_json = get_stations(station_code)
+            
+
+
+        else:
+            return jsonify({'status': '500, radio garden /places is down or cant connnect to server'}), 500
+   
+
+        return jsonify({'status': '200, OK', 'stations_geo' : station_geo , 'new_stations' : stations_json  , 'debug': "station cluster index: " + str(station_index) + ": Station code: " + station_code}), 200 
+    
+    except Exception as e:
+        return jsonify({'status': '500, Flask server error' + str(e)}), 500   
 
 
 @app.route('/get_radio_stations', methods=['POST'])
@@ -326,7 +358,7 @@ def remove_from_saved():
 
 
 if __name__ == "__main__":
-    #start_display()  # screen comes alive as soon as Flask starts
-    #set_album_art("uploads/vinyl.gif")  # default art shown even when idle
+    start_display()  # screen comes alive as soon as Flask starts
+    set_album_art("uploads/vinyl.gif")  # default art shown even when idle
     app.run(host='0.0.0.0', port=8000, debug=True, use_reloader=False)
 

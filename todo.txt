@@ -1,0 +1,7 @@
+===================================
+============== TO DO ==============
+===================================
+
+- Random station
+- fix selection on save, remove and find stations to select either the saved or top (non title card) selectable
+- add (currently stations / playing) that updates in between website refreshes
