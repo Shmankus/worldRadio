@@ -5,34 +5,34 @@ import requests, math
 import vlc
 import time
 from draw_screen import start_display, start_spin, stop_spin, set_text, set_album_art
+import json
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
 current_player = None
 stop_flag = threading.Event()
-# Serve static files (JS, CSS, etc.)
-@app.route('/<path:filename>')
-def serve_static(filename):
-    if os.path.exists(os.path.join('templates', filename)):
-        return send_from_directory('templates', filename)
-    return render_template('index.html')
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+# Global variables
+found_radio_stations = []
+saved_radio_stations = []
 
-
-
-
-
-    
-
+""" HELPER FUNCTIONS """
 def get_stations(loc_id):
+    """
+        Gets all of the stations through a fetch to the radio garden API
     
+        
+        returns:
+            radio_json : list of stations
+            
+    """
+    global found_radio_stations
     radio_json = []
-
+    radio_json.extend(read_saved_stations())
+    radio_json.append({'title': '----------Found----------'}) 
     try:
         response = requests.get('https://radio.garden/api/ara/content/page/' + loc_id)
         if response.status_code == 200:
+            temp_found_stations = []
             data = response.json()
             utc_offset = (data['data']['utcOffset']) 
             for channels in data['data']['content']:
@@ -44,8 +44,9 @@ def get_stations(loc_id):
                         title = (item['page']['title'])
                         country = (item['page']['country']['title'])
                         url = ('http://radio.garden/api/ara/content/listen/' + item['page']['url'].split("/")[-1] + '/channel.mp3')
-                        radio_json.append({'title': title, 'country': country,'utcOffset': utc_offset, 'url': url})
-            
+                        temp_found_stations.append({'title': title, 'country': country,'utcOffset': utc_offset, 'url': url})
+            found_radio_stations = temp_found_stations
+            radio_json.extend(found_radio_stations)
 
         else:
             print(f"Failed to fetch data. Status code: {response.status_code}")
@@ -54,26 +55,6 @@ def get_stations(loc_id):
     return radio_json
 
 
-# helper for find_geo
-def is_close(target_geo, given_geo):
-	closeness = .50
-	return math.dist(target_geo, given_geo) <= closeness
-
-# helper for get_loc_id
-def find_geo_old(json_obj, target_geo):
-    if isinstance(json_obj, dict):
-        if "geo" in json_obj and is_close(target_geo, json_obj["geo"]):
-            return json_obj["id"]
-        for value in json_obj.values():
-            result = find_geo(value, target_geo)
-            if result is not None:
-                return result
-    elif isinstance(json_obj, list):
-        for item in json_obj:
-            result = find_geo(item, target_geo)
-            if result is not None:
-                return result
-    return None
 
 def _geo_distance(geo1, geo2):
     """Euclidean distance between two geo points (dict or sequence)."""
@@ -94,65 +75,27 @@ def _collect_candidates(json_obj, candidates):
             _collect_candidates(item, candidates)
 
 
-def find_geo(json_obj, target_geo):
+def _find_geo(json_obj, target_geo):
+    """
+        gets min distance of all candidates
+        
+        returns:
+            best candidate
+    """
     candidates = []
     _collect_candidates(json_obj, candidates)
-
     if not candidates:
         return None
-
     return min(candidates, key=lambda c: _geo_distance(target_geo, c[1]))[0]
-
-# gets the id of the location
-def get_loc_id():
-
-	try:
-		response = requests.get('http://radio.garden/api/ara/content/places')
-    
-		if response.status_code == 200:
-			data = response.json()
-		    # 52.28895497254308, 20.618328365871974	
-			loc_id = ((find_geo(data, [  20.618328365871974	, 52.28895497254308])))
-			print(loc_id)
-			print(json.dumps(get_stations(loc_id)))
-			
-			#print(f"API Version: {data['apiVersion']}")
-			#print(f"size: {data['data']['list'][0]['size']}")
-		else:
-			print(f"Failed to fetch data. Status code: {response.status_code}")
-
-	except requests.exceptions.RequestException as e:
-		print(f"A network error occurred: {e}")
-
-
-
-@app.route('/get_radio_stations', methods=['POST'])
-def get_radio_stations():
-  data = request.get_json()
-  lat = data.get('lat')
-  lon = data.get('lon')
-  stations_json = []
-  try:
-    response = requests.get('http://radio.garden/api/ara/content/places')    
-    if response.status_code == 200:
-      data = response.json()
-		    # 52.28895497254308, 20.618328365871974	
-      loc_id = ((find_geo(data, [float(lon), float(lat)])))
-      print(loc_id)
-      stations_json = (get_stations(loc_id))		
-			#print(f"API Version: {data['apiVersion']}")
-			#print(f"size: {data['data']['list'][0]['size']}")
-    else:
-      print(f"Failed to fetch data. Status code: {response.status_code}")
-  except requests.exceptions.RequestException as e:
-    print(f"A network error occurred: {e}")
-  return jsonify({'status': '200, ok', 'stations_json': stations_json}), 200
-
-
 
 
 
 def play(url, station_name=None, station_country=None, time_offset=None, album_art_path="uploads/vinyl.gif"):
+    """
+        Plays the requested song
+        Spawns player instance 
+       
+    """
     global current_player
     stop_flag.clear()
     try:
@@ -184,8 +127,96 @@ def play(url, station_name=None, station_country=None, time_offset=None, album_a
         current_player = None
 
 
+
+def write_json(new_data, filename):
+    
+    with open(filename, 'r') as file:
+        file_data = json.load(file)
+    entry_exists = any(entry["title"] == new_data['title'] for entry in file_data["saved_stations"])
+
+    if (not entry_exists):
+        with open(filename, 'w') as file:
+            file_data["saved_stations"].append(new_data)
+            json.dump(file_data, file, indent=4)
+            global saved_radio_stations
+            saved_radio_stations = file_data["saved_stations"]
+            
+        return jsonify({'status': 'ok', 'new_stations': compile_new_stations()}), 200
+    else:
+        return jsonify({'status': 'ok', 'new_stations': compile_new_stations()}), 200
+
+
+def compile_new_stations():
+    """
+        Compiles new list of saved stations (called after removal and addition)
+    
+        returns: 
+            station_list
+    """    
+
+    global saved_radio_stations
+    global found_radio_stations
+
+    station_list = []
+    station_list.append({"title": "----------Saved----------"})
+    station_list.extend(saved_radio_stations)
+    station_list.append({"title": "----------Found----------"})
+    station_list.extend(found_radio_stations)
+
+    return station_list
+
+
+""" FLASK ROUTES """
+
+
+# Serve static files (JS, CSS, etc.)
+@app.route('/<path:filename>')
+def serve_static(filename):
+    if os.path.exists(os.path.join('templates', filename)):
+        return send_from_directory('templates', filename)
+    return render_template('index.html')
+
+# serves root
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+
+@app.route('/get_radio_stations', methods=['POST'])
+def get_radio_stations():
+    """
+        Gets all radio stations given a latitude and longitude
+        
+        returns:
+            status : 200 or 500
+            stations_json
+    """
+    data = request.get_json()
+    lat = data.get('lat')
+    lon = data.get('lon')
+    stations_json = []
+    try:
+        response = requests.get('http://radio.garden/api/ara/content/places')    
+        if response.status_code == 200:
+            data = response.json()
+            loc_id = ((_find_geo(data, [float(lon), float(lat)])))
+            stations_json = (get_stations(loc_id))		
+        else:
+            print(f"Failed to fetch data. Status code: {response.status_code}")
+    except requests.exceptions.RequestException as e:
+        return jsonify({'status': '500, get_radio_stations ERROR', 'stations_json': stations_json}), 500  
+    return jsonify({'status': '200, ok', 'stations_json': stations_json}), 200
+
+
 @app.route('/play_station', methods=['POST'])
 def play_station():
+    """
+        Spawns helper thread to play the requested station
+
+        returns:
+            status : 200 
+
+    """
     stop_station()
     data = request.get_json()
     station_url = data.get('url')
@@ -203,173 +234,99 @@ def play_station():
 
 @app.route('/stop_station', methods=['POST'])
 def stop_station():
+    """
+        Stops the currently playing station thread
+
+        returns:
+            status : 200
+
+    """
     stop_flag.set()
     if current_player:
         current_player.stop()
-    # removed set_text here — play() will set it, and if genuinely stopping
-    # without replaying, play()'s finally block handles the reset
     return jsonify({'status': '200, stopped'}), 200
+
+@app.route('/read_saved_stations', methods=['POST'])
+def read_saved_stations():
+    """    
+        Retrieves the saved stations from the file and adds needed title bar
+
+        returns:
+            List of saved radio station JSON objects        
+    """
+    global saved_radio_stations
+    saved = [{'title': '----------Saved----------'}]
+    temp_saved = []
+    
+    with open('saved_stations.json', 'r') as file:
+        file_data = json.load(file)
+    
+    for entry in file_data['saved_stations']:
+        temp_saved.append(entry)
+    saved_radio_stations = temp_saved
+    saved.extend(saved_radio_stations)
+    
+    return saved
 
 @app.route('/add_to_saved', methods=['POST'])
 def add_to_saved():
-    return jsonify({'status': '200, stopped'}), 200
-
+    """
+        Adds the requested station to the saved stations file
+    
+        returns:
+            Status: 200 or 500
+            new_stations: newly compiled list of stations including the new saved            
+      
+    """
+    data = request.get_json()
+    station_url = data.get('url')
+    station_name = data.get('title')
+    station_country = data.get('country')
+    time_offset = data.get('time_offset')
+    new_entry = {
+    'url' : station_url,
+    'title' : station_name,
+    'country' : station_country,
+    'time_offset' : time_offset
+    }  
+    try:
+        global saved_radio_stations
+        status = write_json(new_entry, 'saved_stations.json')
+        return status
+    except Exception as e:
+        return jsonify({'status': str(e)}), 500
 
 @app.route('/remove_from_saved', methods=['POST'])
 def remove_from_saved():
-    return jsonify({'status': '200, stopped'}), 200
+    """
+        Removes the requested station from the saved stations file
 
-
-"""
-
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# Configure upload folder and limit file size (e.g., 16MB max)
-UPLOAD_FOLDER = './uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB
-
-# Create the folder if it doesn't exist
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    # 1. Check if the file part is in the request
-    if 'my_file' not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-
-    file = request.files['my_file']
-
-    # 2. Check if the user selected an empty file
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
-
-    if file and allowed_file(file.filename):
-        # 3. Clean the filename to prevent directory traversal attacks
-        filename = secure_filename(file.filename)
-
-        # 4. Save the file to your folder
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-
-        return jsonify({"status": f"File {filename} successfully uploaded!"}), 200
-
-@app.route('/getImages', methods=['GET'])
-def get_file():
-	folder_path = UPLOAD_FOLDER
-	files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-	return jsonify({"status": "200", "files": files})
-
-
-@app.route('/displayImage', methods=['POST'])
-def display_image():
+        returns:
+            status: 200 or 500
+            new_stations: newly compiled list of stations excluding the requested station
+    """    
+    to_remove = request.get_json()
+    station_name = to_remove.get('title')
+    
     try:
-        data = request.json
-        image_path = data.get('imagePath')
-        if not image_path:
-            return jsonify({"status": "400 - missing imagePath"}), 400
-        
-        # Kill any existing display-image processes
-        subprocess.run(["killall", "display-image.sh"], capture_output=True)
-        
-        # Start the wrapper script
-        subprocess.Popen(["/usr/local/bin/display-image.sh", image_path])
-        
-        return jsonify({"status": "200"})
+        with open("saved_stations.json", "r") as file:
+            data = json.load(file)
+
+        for index, item in enumerate(data["saved_stations"]):
+            if item.get('title') == station_name:
+                data["saved_stations"].pop(index)
+                break  # Stop looping after the first match is deleted
+        with open("saved_stations.json", "w") as file:
+            json.dump(data, file, indent=4)
+        global saved_radio_stations
+        saved_radio_stations = data["saved_stations"]
+        return jsonify({'status': 'ok', 'new_stations': compile_new_stations()}), 200
     except Exception as e:
-        return jsonify({"status": f"555 - {str(e)}"}), 500
+        return jsonify({'status': str(e)}), 500
 
-@app.route('/killDisplay', methods=['POST'])
-def kill_display():
-    try:
-        subprocess.run(["killall", "display-image.sh"], capture_output=True)
-        subprocess.run(["killall", "fbi"], capture_output=True)
-        return jsonify({"status": "200 - Display killed"})
-    except Exception as e:
-        return jsonify({"status": f"555 - {str(e)}"}), 500
-
-
-
-@app.route('/checkService', methods=['POST'])
-def checkService():
-	try:
-		data = request.json
-		service = data.get('serviceName')
-		if not service:
-			return jsonify({"status": "400 - missing service name"}), 400
-
-
-
-		isRunning = subprocess.run(
-                	["systemctl", "is-active", "--quiet", service],
-            		check=False
-        	)
-
-		return jsonify({"status": "200","isRunning": isRunning.returncode == 0})  
-
-	except Exception as e:
-		return jsonify({"status": f"555 - {str(e)}"}), 500   
-
-
-
-
-@app.route('/stopService', methods=['POST'])
-def stopService():
-    try:
-        data = request.json
-        service = data.get('serviceName')  # Should be 'dashboard' not 'dashboard.service'
-        
-        allowed_services = ['dashboard', 'flaskapp']
-        if service not in allowed_services:
-            return jsonify({"status": "400 - Service not allowed"}), 400
-        
-        result = subprocess.run(
-            ["sudo", "systemctl", "stop", service],
-            check=False,
-            capture_output=True,
-            text=True
-        )
-        
-        return jsonify({
-            "status": "200" if result.returncode == 0 else f"Failed - {result.stderr}",
-            "isRunning": False if result.returncode == 0 else True
-        })
-    except Exception as e:
-        return jsonify({"status": f"555 - {str(e)}"}), 500
-
-
-
-@app.route('/startService', methods=['POST'])
-def startService():
-    try:
-        data = request.json
-        service = data.get('serviceName')  # Should be 'dashboard' not 'dashboard.service'
-        
-        allowed_services = ['dashboard', 'flaskapp']
-        if service not in allowed_services:
-            return jsonify({"status": "400 - Service not allowed"}), 400
-        
-        result = subprocess.run(
-            ["sudo", "systemctl", "start", service],
-            check=False,
-            capture_output=True,
-            text=True
-        )
-        
-        return jsonify({
-            "status": "200" if result.returncode == 0 else f"Failed - {result.stderr}",
-            "isRunning": False if result.returncode != 0 else True
-        })
-    except Exception as e:
-        return jsonify({"status": f"555 - {str(e)}"}), 500
-
-"""
 
 if __name__ == "__main__":
-    start_display()  # screen comes alive as soon as Flask starts
-    set_album_art("uploads/vinyl.gif")  # default art shown even when idle
+    #start_display()  # screen comes alive as soon as Flask starts
+    #set_album_art("uploads/vinyl.gif")  # default art shown even when idle
     app.run(host='0.0.0.0', port=8000, debug=True, use_reloader=False)
 

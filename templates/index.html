@@ -1,4 +1,4 @@
-https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta name="generator" content="HTML Tidy for HTML5 for Linux version 5.8.0">
@@ -59,13 +59,16 @@ https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCT
     <div class="bg-slate-800 rounded-lg shadow-lg p-6 mb-6">
       <h2 class="text-xl font-semibold text-white mb-4 flex items-center gap-2">Radio</h2>
       <form id="locationForm" class="form-container" name="locationForm">
-        <div class="input-group">
-          <label for="latitude">Latitude</label> <input type="text" id="latitude" name="latitude" readonly placeholder="Click map to select">
+        <div class="input-group hidden">
+          <label  for="latitude">Latitude</label> <input type="text" id="latitude" name="latitude" readonly placeholder="Click map to select">
         </div>
-        <div class="input-group">
+        <div class="input-group hidden">
           <label for="longitude">Longitude</label> <input type="text" id="longitude" name="longitude" readonly placeholder="Click map to select">
-        </div><button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="submit">Search Stations</button>
-      </form>
+        </div>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="submit">Search Stations</button>
+     
+            <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition" type="searchRandom">Random</button>
+     </form>
       <div id="map"></div>
       <form id="stationSelectForm" class="space-y-4" name="stationSelectForm">
         <div>
@@ -88,132 +91,243 @@ https://music.apple.com/us/album/2011-toyota-prius/1895959083?i=6765462431<!DOCT
   </div><!-- Radio and Map logic -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script> 
-  <script>
 
-                                                // 4. Initialize Map (Centered globally or at default coordinates)
-                                                // Format: [Latitude, Longitude], Zoom Level
-                                                const defaultLocation = [40.7128, -74.0060]; // New York City default
-                                                const map = L.map('map').setView(defaultLocation, 13);
 
-                                                // 5. Load Map Tiles from OpenStreetMap (Free alternative to Google Maps)
-                                                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                                                        maxZoom: 19,
-                                                        attribution: '© OpenStreetMap contributors'
-                                                }).addTo(map);
-
-                                                // 6. Create a Draggable Marker at the default location
-                                                let marker = L.marker(defaultLocation, {
-                                                        draggable: true
-                                                }).addTo(map);
-
-                                                // Grab form input elements
-                                                const latInput = document.getElementById('latitude');
-                                                const lngInput = document.getElementById('longitude');
-
-                                                // 7. Function to update input fields
-                                                function updateInputs(lat, lng) {
-                                                        // .toFixed(6) limits decimal places for clean storage
-                                                        latInput.value = lat.toFixed(6);
-                                                        lngInput.value = (((lng + 180) % 360 + 360) % 360 - 180).toFixed(6);
-                                                }
-
-                                                // Populate inputs initially with default coordinates
-                                                updateInputs(defaultLocation[0], defaultLocation[1]);
-
-                                                // 8. Event Listener: Map Click (Move marker and update fields)
-                                                map.on('click', function(e) {
-                                                        const lat = e.latlng.lat;
-                                                        const lng = e.latlng.lng;
-
-                                                        marker.setLatLng(e.latlng); // Move marker to clicked spot
-                                                        updateInputs(lat, lng);
-                                                });
-
-                                                // 9. Event Listener: Marker Drag (Update fields after drag finishes)
-                                                marker.on('dragend', function(e) {
-                                                        const position = marker.getLatLng();
-                                                        updateInputs(position.lat, position.lng);
-                                                });
-
-                                                // Handle Form Submission
-                                                document.getElementById('locationForm').addEventListener('submit', async (e) => {
-                                                        e.preventDefault();
+<script>
+    /* Map and button logic */
 
 
 
-                                                        try {
-                                                                const response = await fetch(`http://192.168.86.29:8000/get_radio_stations`, {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({ 'lat':latInput.value , 'lon':lngInput.value })
-                                                                });
-                                                                const data = await response.json();
-                                                                console.log(data.status, data.stations_json);
+    // Format: [Latitude, Longitude], Zoom Level
+    const defaultLocation = [40.7128, -74.0060]; // New York City default
+    const map = L.map('map').setView(defaultLocation, 13);
+
+    // 5. Load Map Tiles from OpenStreetMap (Free alternative to Google Maps)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 6. Create a Draggable Marker at the default location
+    let marker = L.marker(defaultLocation, {
+        draggable: true
+    }).addTo(map);
+
+    // Grab form input elements
+    const latInput = document.getElementById('latitude');
+    const lngInput = document.getElementById('longitude');
+
+    // 7. Function to update input fields
+    function updateInputs(lat, lng) {
+    // .toFixed(6) limits decimal places for clean storage
+        latInput.value = lat.toFixed(6);
+        lngInput.value = (((lng + 180) % 360 + 360) % 360 - 180).toFixed(6);
+    }
+
+    // Populate inputs initially with default coordinates
+    updateInputs(defaultLocation[0], defaultLocation[1]);
+
+    // 8. Event Listener: Map Click (Move marker and update fields)
+    map.on('click', function(e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+
+        marker.setLatLng(e.latlng); // Move marker to clicked spot
+        updateInputs(lat, lng);
+    });
+
+    // 9. Event Listener: Marker Drag (Update fields after drag finishes)
+    marker.on('dragend', function(e) {
+        const position = marker.getLatLng();
+        updateInputs(position.lat, position.lng);
+    });
+
+    // Handle Form Submission
+    document.getElementById('locationForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        try {
+            const response = await fetch(`http://192.168.86.29:8000/get_radio_stations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 'lat':latInput.value , 'lon':lngInput.value })
+            });
+            const data = await response.json();
+            console.log(data.status, data.stations_json);
+
+            const container = document.getElementById('selectedStation');
+            if (data.stations_json && data.stations_json.length > 0) {
+                container.innerHTML = data.stations_json
+                    .map(station => `<option value="${station.url}" title="${station.title}"data-country="${station.country}
+                        "data-utcoffset="${station.utcOffset}">${station.title}</option>`).join('');
+            } else {
+                container.innerHTML = '<p class="text-slate-400">No images uploaded yet</p>';
+            }
+
+
+        } catch (error) {
+            console.log(JSON.stringify(error.message));
+        }
+
+    });
+
+
+/* Bottom row buttons */
+
+    /**
+        Repopulates the selection field with updated stations 
+    */
+    async function refreshStations(new_stations){
+        try {
+            const data = new_stations 
+
+            const container = document.getElementById('selectedStation');
+       
+            container.innerHTML = data
+                .map(station => `<option value="${station.url}" title="${station.title}"data-country="${station.country}
+                    "data-utcoffset="${station.utcOffset}">${station.title}</option>`).join('');
+
+        } catch (error) {
+            console.log(JSON.stringify(error.message));
+        }
+
+    }
 
 
 
-                                                                const container = document.getElementById('selectedStation');
-                                                                if (data.stations_json && data.stations_json.length > 0) {
-                                                                        container.innerHTML = data.stations_json
-                                                                                .map(station => `<option value="${station.url}" title="${station.title}" data-country="${station.country}" data-utcoffset="${station.utcOffset}">${station.title}</option>`)
-                                                                                .join('');
-                                                                } else {
-                                                                        container.innerHTML = '<p class="text-slate-400">No images uploaded yet</p>';
-                                                                }
+    /**
+        Sends the selected station to be played by the server
+        
+        Type : submit 
+         
+        Method : POST
+    
+        Sends title, country, url and time_offset to Flask
+    */
+    document.getElementById('stationSelectForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            console.log(selectedStation.value)
+            const selectedOption = selectedStation.options[selectedStation.selectedIndex];
+            const response = await fetch(`http://192.168.86.29:8000/play_station`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    'title': selectedOption.text,
+                    'country' : selectedOption.dataset.country,
+                    'url': selectedStation.value,
+                    'time_offset' : selectedOption.dataset.utcoffset
+                })
+            });
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    });
 
 
-                                                        } catch (error) {
-                                                                console.log(JSON.stringify(error.message));
-                                                        }
+    /**
+        Sends signal to stop playback on server
+        
+        Type : onClick 
+         
+        Method : POST
+    
+    */
+    document.getElementById('stopStation').addEventListener('click', async () => {
+        try {
+            const response = await fetch(`http://192.168.86.29:8000/stop_station`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            console.log(data.status);
+            } catch (error) {
+                console.error('Error:', error);
+                            }
+       });
 
 
-
-                                                });
-
-
-
-
-                                                document.getElementById('stationSelectForm').addEventListener('submit', async (e) => {
-                                                        e.preventDefault();
-                                                        try {
-                                                                console.log(selectedStation.value)
-
-                                                                const selectedOption = selectedStation.options[selectedStation.selectedIndex];
-
-                                                                const response = await fetch(`http://192.168.86.29:8000/play_station`, {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' },
-                                                                        body: JSON.stringify({
-                                                                                // This pulls the text inside the <option> tag (e.g., "RADIO538")
-                                                                                'title': selectedOption.text,
-                                                                                'country' : selectedOption.dataset.country,
-                                                                                'url': selectedStation.value,
-                                                                                'time_offset' : selectedOption.dataset.utcoffset
-                                                                        })
-                                                                });
-
-                                                                //const data = await response.json();
-                                                                //console.log(data.status);
-                                                        } catch (error) {
-                                                                console.error('Error:', error);
-                                                        }
-                                                });
-
-
-                                                document.getElementById('stopStation').addEventListener('click', async () => {
-                                                        try {
-                                                                const response = await fetch(`http://192.168.86.29:8000/stop_station`, {
-                                                                        method: 'POST',
-                                                                        headers: { 'Content-Type': 'application/json' }
-                                                                });
-                                                                const data = await response.json();
-                                                                console.log(data.status);
-                                                        } catch (error) {
-                                                                console.error('Error:', error);
-                                                        }
-                                                });
+    /**
+        Saves the selected station to saved json
+        
+        Type : onClick 
+         
+        Method : POST
+    
+        Sends title, country, url and time_offset to Flask
+    */
+    document.getElementById('saveStation').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            const selectedStation = document.getElementById('selectedStation');
+            const selectedOption = selectedStation.options[selectedStation.selectedIndex];
+            const response = await fetch(`http://192.168.86.29:8000/add_to_saved`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    'title': selectedOption.text,
+                    'country' : selectedOption.dataset.country,
+                    'url': selectedStation.value,          
+                    'time_offset' : selectedOption.dataset.utcoffset
+                })
+            });
+            const data = await response.json();
+            console.log(data.status);
+            refreshStations(data.new_stations);
+            } catch (error) {
+                console.error('Error:', error);
+                            }
+       });
 
 
-  </script>
+    /**
+        Removes the selected station from saved json
+        
+        Type : onClick 
+         
+        Method : POST
+    
+        Sends title, country, url and time_offset to Flask
+    */
+    document.getElementById('removeStation').addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+            const selectedStation = document.getElementById('selectedStation');
+            const selectedOption = selectedStation.options[selectedStation.selectedIndex];
+            const response = await fetch(`http://192.168.86.29:8000/remove_from_saved`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    'title': selectedOption.text,
+                    'country' : selectedOption.dataset.country,
+                    'url': selectedStation.value,          
+                    'time_offset' : selectedOption.dataset.utcoffset
+                })
+            });
+            const data = await response.json();
+            
+            refreshStations(data.new_stations);
+
+            } catch (error) {
+                console.error('Error:', error);
+                            }
+       });
+   
+
+
+    // initial startup saved stations pull
+    async function startupFetch(){   
+        const response = await fetch(`http://192.168.86.29:8000/read_saved_stations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await response.json();
+        refreshStations(data)    
+    }
+
+    startupFetch();
+
+ 
+</script>
 </body>
 </html>
