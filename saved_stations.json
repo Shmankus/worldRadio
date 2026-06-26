@@ -1,1 +1,10 @@
-{}
+{
+    "saved_stations": [
+        {
+            "url": "http://radio.garden/api/ara/content/listen/cok0vuDC/channel.mp3",
+            "title": "MDR Sputnik",
+            "country": "Germany\n                        ",
+            "time_offset": "120"
+        }
+    ]
+}
