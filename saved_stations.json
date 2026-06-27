@@ -4,13 +4,25 @@
             "url": "http://radio.garden/api/ara/content/listen/1vlrqH6v/channel.mp3",
             "title": "Smooth Jazz 24/7",
             "country": "United States\n                        ",
-            "time_offset": "-240"
+            "utcOffset": "-240"
         },
         {
             "url": "http://radio.garden/api/ara/content/listen/rln9igT1/channel.mp3",
             "title": "Radio Chemnitz - Freitag Nacht",
             "country": "Germany\n                        ",
-            "time_offset": "120"
+            "utcOffset": "120"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/rDtgFwQW/channel.mp3",
+            "title": "Revolucion radio",
+            "country": "United States\n                        ",
+            "utcOffset": -240
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/6fNoOGMY/channel.mp3",
+            "title": "FM Kahoku 78.8\uff08FM\u304b\u307b\u304f\uff09",
+            "country": "Japan\n                        ",
+            "utcOffset": "540"
         }
     ]
 }

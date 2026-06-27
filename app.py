@@ -4,7 +4,7 @@ from werkzeug.utils import secure_filename
 import requests, math
 import vlc
 import time
-from draw_screen import start_display, start_spin, stop_spin, set_text, set_album_art
+from draw_screen import start_display, start_spin, stop_spin, set_text, set_gif
 import json
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
@@ -319,7 +319,7 @@ def add_to_saved():
     'url' : station_url,
     'title' : station_name,
     'country' : station_country,
-    'time_offset' : time_offset
+    'utcOffset' : time_offset
     }  
     try:
         global saved_radio_stations
@@ -359,6 +359,6 @@ def remove_from_saved():
 
 if __name__ == "__main__":
     start_display()  # screen comes alive as soon as Flask starts
-    set_album_art("uploads/vinyl.gif")  # default art shown even when idle
+    set_gif("uploads/vinyl.gif")  # default art shown even when idle
     app.run(host='0.0.0.0', port=8000, debug=True, use_reloader=False)
 
