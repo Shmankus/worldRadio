@@ -3,47 +3,36 @@ import time
 import threading
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
-from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+from datetime import datetime, timezone, timedelta
+
+# Display Configurations
 FB_WIDTH = 240
 FB_HEIGHT = 320
 FB_PATH = "/dev/fb1"
 
-DARK_RED = (80, 0, 0)
-TEXT_COLOR = (255, 255, 255)
+# Upgraded Color Palette (Deep Cyberpunk / Synthwave Vibe)
+BG_COLOR = (35, 15, 20)        # Deep cherry 
+ACCENT_COLOR = (255, 45, 85)   # Neon pink/red line accent
+TEXT_MAIN = (240, 240, 255)    # Crisp off-white
+TEXT_MUTED = (130, 120, 150)   # Muted lavender/grey for labels
 
-title_text = "Nothing Playing"
-title_lock = threading.Lock()
-country_text = "No Country"
-country_lock = threading.Lock()
-time_text = "00:00 AM"
-time_lock = threading.Lock()
-
-is_spinning = threading.Event()
-_display_thread = None
-_display_running = threading.Event()
-
-# pre-composited frames: each entry is raw RGB565 bytes ready to write directly to fb1
-_composited_frames = []
-_frames_lock = threading.Lock()
-
-# current frame index — module level so stop_spin() can read it instantly
-_frame_idx = 0
-_frame_lock = threading.Lock()
-
-# cached background numpy array, rebuilt only when text changes
-_bg_array = None
-_bg_lock = threading.Lock()
-_last_title = None
-_last_country = None
-
-
-# at the top of spin_image.py, after FB_WIDTH/FB_HEIGHT
-TEXT_ZONE = FB_HEIGHT // 3
-IMAGE_ZONE = FB_HEIGHT - TEXT_ZONE
-GIF_SIZE = 180  # change this one number to resize
+GIF_SIZE = 180
 GIF_PASTE_X = (FB_WIDTH - GIF_SIZE) // 2
-GIF_PASTE_Y = TEXT_ZONE + (IMAGE_ZONE - GIF_SIZE) // 2
+GIF_PASTE_Y = 130 # Clean spacing below the header UI
 
+# Threading & Shared State
+is_spinning = threading.Event()
+_display_running = threading.Event()
+_display_thread = None
+_state_lock = threading.Lock()
+
+# App State
+title_text = "Nothing Playing"
+country_text = "No Country"
+time_offset_str = "0"
+gif_path_to_load = None
+state_changed = False
 
 def load_font(size=12):
     try:
@@ -51,215 +40,201 @@ def load_font(size=12):
     except IOError:
         return ImageFont.load_default()
 
-_font = None
-
-def _build_background():
-    """Render background + text into a numpy array. Called once + whenever text changes."""
-    global _last_title, _last_country
-    text_zone_height = FB_HEIGHT // 3
-
-    with title_lock:
-        t = title_text
-    with country_lock:
-        c = country_text
-    with time_lock:
-        d = time_text
-
-    canvas_img = Image.new('RGB', (FB_WIDTH, FB_HEIGHT), DARK_RED)
-    draw = ImageDraw.Draw(canvas_img)
-
-    bbox = draw.textbbox((0, 0), t, font=_font)
-    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    draw.text(((FB_WIDTH - tw) // 2, (text_zone_height - th) // 2 - th),
-              t, font=_font, fill=TEXT_COLOR)
-
-    bbox = draw.textbbox((0, 0), c, font=_font)
-    cw, ch = bbox[2] - bbox[0], bbox[3] - bbox[1]
-    draw.text(((FB_WIDTH - cw) // 2, (text_zone_height - ch) // 2 + ch),
-              c, font=_font, fill=TEXT_COLOR)
-
-    
-
-
-    from datetime import datetime, timedelta, timezone
-    from zoneinfo import ZoneInfo
-    
-
-
-
-    _last_title = t
-    _last_country = c
-    return np.asarray(canvas_img).copy()
-
-def _composite_frames_onto_bg(bg_array, frames_rgba):
-    """Pre-composite all GIF frames onto the background array.
-    Returns list of raw RGB565 bytes, one per frame, ready to write directly to fb."""
-    size, paste_x, paste_y = GIF_SIZE, GIF_PASTE_X, GIF_PASTE_Y
-    result = []
-    for rgb, alpha in frames_rgba:
-        canvas = bg_array.copy()
-        mask = alpha > 0
-        canvas[paste_y:paste_y+size, paste_x:paste_x+size][mask] = rgb[mask]
-        r = canvas[:, :, 0].astype(np.uint16)
-        g = canvas[:, :, 1].astype(np.uint16)
-        b = canvas[:, :, 2].astype(np.uint16)
-        rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-        result.append(rgb565.astype('<u2').tobytes())
-    return result
+font_large = load_font(15)
+font_small = load_font(11)
 
 def set_text(new_title, new_country, new_timeOffset):
-    global title_text, country_text, time_text
-    with title_lock:
-        title_text = new_title
-    with country_lock:
-        country_text = new_country
-    with time_lock:
-        time_text = new_timeOffset
+    global title_text, country_text, time_offset_str, state_changed
+    with _state_lock:
+        title_text = " ".join(new_title.strip().split()) if new_title else "Nothing Playing"
+        country_text = " ".join(new_country.strip().split()) if new_country else "No Country"
+        time_offset_str = str(new_timeOffset)
+        state_changed = True
 
+def set_gif(image_path):
+    global gif_path_to_load, state_changed
+    with _state_lock:
+        gif_path_to_load = image_path
+        state_changed = True
 
-    # rebuild composited frames with new background text
-    _rebuild_composited_frames()
+def _rgb_to_rgb565(rgb_array):
+    """Vectorized conversion of RGB arrays into raw RGB565 bytes (used only during caching)."""
+    r = rgb_array[:, :, 0].astype(np.uint16)
+    g = rgb_array[:, :, 1].astype(np.uint16)
+    b = rgb_array[:, :, 2].astype(np.uint16)
+    rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+    return rgb565.astype('<u2').tobytes()
 
-def set_album_art(image_path):
-    """Load GIF frames and pre-composite them onto the current background."""
-    global _gif_frames_rgba
-    img = Image.open(image_path)
-    frames_rgba = []
-    try:
-        for gif_frame in ImageSequence.Iterator(img):
-            f = gif_frame.convert('RGBA').resize((GIF_SIZE, GIF_SIZE))
-            rgb = np.asarray(f.convert('RGB')).copy()
-            alpha = np.asarray(f.split()[-1]).copy()
-            frames_rgba.append((rgb, alpha))
-    except EOFError:
-        pass
-    _gif_frames_rgba = frames_rgba
-    print(f"Loaded {len(frames_rgba)} frames from {image_path}", flush=True)
-    _rebuild_composited_frames()
+def _build_static_ui_base(title, country):
+    """Generates the static base image background template."""
+    canvas = Image.new('RGB', (FB_WIDTH, FB_HEIGHT), BG_COLOR)
+    draw = ImageDraw.Draw(canvas)
+    
+    # Draw static layouts & borders
+    draw.rectangle([0, 0, FB_WIDTH, 4], fill=ACCENT_COLOR)
+    
+    bbox_t = draw.textbbox((0, 0), title, font=font_large)
+    draw.text(((FB_WIDTH - (bbox_t[2] - bbox_t[0])) // 2, 12), title, font=font_large, fill=TEXT_MAIN)
+    
+    bbox_c = draw.textbbox((0, 0), country, font=font_small)
+    draw.text(((FB_WIDTH - (bbox_c[2] - bbox_c[0])) // 2, 34), country, font=font_small, fill=TEXT_MUTED)
+    
+    draw.line([(20, 56), (FB_WIDTH - 20, 56)], fill=(40, 35, 60), width=1)
+    draw.line([(20, 106), (FB_WIDTH - 20, 106)], fill=(40, 35, 60), width=1)
+    return canvas
 
-_gif_frames_rgba = []
+def _render_clock_strip_bytes(est_str, dest_str):
+    """Generates just the dynamic dual clock row as a raw sub-segment byte slice."""
+    strip_h = 40  # Covers y coordinates from 61 to 101
+    canvas = Image.new('RGB', (FB_WIDTH, strip_h), BG_COLOR)
+    draw = ImageDraw.Draw(canvas)
+    
+    # Draw Clocks inside the bounding slice
+    draw.text((20, 5), "LOCAL", font=font_small, fill=TEXT_MUTED)
+    draw.text((20, 19), est_str, font=font_large, fill=TEXT_MAIN)
+    
+    bbox_dest_lbl = draw.textbbox((0, 0), "DESTINATION", font=font_small)
+    draw.text((FB_WIDTH - 20 - (bbox_dest_lbl[2]-bbox_dest_lbl[0]), 5), "DESTINATION", font=font_small, fill=TEXT_MUTED)
+    bbox_dest = draw.textbbox((0, 0), dest_str, font=font_large)
+    draw.text((FB_WIDTH - 20 - (bbox_dest[2]-bbox_dest[0]), 19), dest_str, font=font_large, fill=ACCENT_COLOR)
+    
+    return _rgb_to_rgb565(np.asarray(canvas))
 
-def _rebuild_composited_frames():
-    """Rebuild pre-composited frames using current background + current GIF frames."""
-    global _bg_array
-    with _bg_lock:
-        _bg_array = _build_background()
-        composited = _composite_frames_onto_bg(_bg_array, _gif_frames_rgba)
-    with _frames_lock:
-        _composited_frames.clear()
-        _composited_frames.extend(composited)
-    print(f"Rebuilt {len(composited)} composited frames.", flush=True)
-
-def _display_loop(fps=24):
-    global _frame_idx, _last_title, _last_country
+def _display_loop(fps=30):
     frame_delay = 1.0 / fps
     last_minute = -1
-    _cached_clock_frame = None
+    frame_idx = 0
 
-    from zoneinfo import ZoneInfo
+    # Cache stores ready-to-blast raw bytes strings
+    cached_raw_frames = []      # List of compiled full-screen bytearrays
+    clock_bytes_cache = b""     # Pre-rendered raw clock bytes 
+    
+    # Clock byte slice calculations
+    CLOCK_START_Y = 61
+    CLOCK_STRIP_SIZE = 40 * FB_WIDTH * 2  # Height * Width * 2 bytes (RGB565)
+    CLOCK_START_BYTE = CLOCK_START_Y * FB_WIDTH * 2
+    CLOCK_END_BYTE = CLOCK_START_BYTE + CLOCK_STRIP_SIZE
 
-    fb = open(FB_PATH, 'r+b')
+    local_title, local_country = "Nothing Playing", "No Country"
+
     try:
-        print("Display loop running.", flush=True)
+        fb = open(FB_PATH, 'r+b')
+        print("Hardware display loop optimized for legacy hardware.", flush=True)
+
         while _display_running.is_set():
-            start = time.time()
+            start_time = time.time()
+            state_was_updated = False
 
-            with title_lock:
-                cur_title = title_text
-            with country_lock:
-                cur_country = country_text
-            if cur_title != _last_title or cur_country != _last_country:
-                _rebuild_composited_frames()
-                _cached_clock_frame = None  # force clock redraw after rebuild
+            # 1. Thread state checking
+            global state_changed, gif_path_to_load
+            with _state_lock:
+                if state_changed:
+                    local_title = title_text
+                    local_country = country_text
+                    local_offset = time_offset_str
+                    local_gif_path = gif_path_to_load
+                    gif_path_to_load = None
+                    state_changed = False
+                    state_was_updated = True
 
-            with _frames_lock:
-                frames = _composited_frames
-                n = len(frames)
-
-            if n > 0:
-                with _frame_lock:
-                    idx = _frame_idx % n
-
-                now = datetime.now(timezone.utc)
-                cur_minute = now.minute
-
-                if cur_minute != last_minute or _cached_clock_frame is None:
-                    last_minute = cur_minute
-
-                    with time_lock:
-                        offset_str = time_text
+            # Heavily pre-bake assets completely outside of the active rendering frame loop
+            if state_was_updated:
+                cached_raw_frames.clear()
+                gif_to_try = local_gif_path if local_gif_path else "uploads/vinyl.gif"
+                
+                # Render base background asset once
+                base_canvas = _build_static_ui_base(local_title, local_country)
+                
+                try:
+                    img = Image.open(gif_to_try)
+                    for f in ImageSequence.Iterator(img):
+                        rgba_f = f.convert('RGBA').resize((GIF_SIZE, GIF_SIZE))
+                        rgb_f = rgba_f.convert('RGB')
+                        
+                        # Merge frame directly onto base layout canvas
+                        frame_canvas = base_canvas.copy()
+                        frame_canvas.paste(rgb_f, (GIF_PASTE_X, GIF_PASTE_Y), rgba_f)
+                        
+                        # Pre-compile the entire screen down into its permanent 16-bit format
+                        cached_raw_frames.append(bytearray(_rgb_to_rgb565(np.asarray(frame_canvas))))
+                except Exception as e:
+                    print(f"Failed caching asset {gif_to_try}: {e}")
+                    # Safe clean recovery fallback to default loop
                     try:
-                        total_minutes = int(offset_str)
-                        hour_offset = total_minutes // 60
-                        minute_offset = total_minutes % 60
-                    except (ValueError, TypeError):
-                        hour_offset = 0
-                        minute_offset = 0
+                        img = Image.open("uploads/vinyl.gif")
+                        for f in ImageSequence.Iterator(img):
+                            rgba_f = f.convert('RGBA').resize((GIF_SIZE, GIF_SIZE))
+                            rgb_f = rgba_f.convert('RGB')
+                            frame_canvas = base_canvas.copy()
+                            frame_canvas.paste(rgb_f, (GIF_PASTE_X, GIF_PASTE_Y), rgba_f)
+                            cached_raw_frames.append(bytearray(_rgb_to_rgb565(np.asarray(frame_canvas))))
+                    except Exception as fb_e:
+                        print(f"Critical asset fallback failure: {fb_e}")
 
-                    target_time = now + timedelta(hours=hour_offset, minutes=minute_offset)
-                    time_str = target_time.strftime("%I:%M %p")
+                if not cached_raw_frames:
+                    # Absolute emergency fallback if parsing is broken
+                    cached_raw_frames.append(bytearray(_rgb_to_rgb565(np.asarray(base_canvas))))
+                
+                last_minute = -1  # Force immediate clock calculation recalculation
 
-                    raw = frames[idx]
-                    arr = np.frombuffer(raw, dtype='<u2').reshape(FB_HEIGHT, FB_WIDTH)
-                    r = ((arr & 0xF800) >> 8).astype(np.uint8)
-                    g = ((arr & 0x07E0) >> 3).astype(np.uint8)
-                    b = ((arr & 0x001F) << 3).astype(np.uint8)
-                    rgb_arr = np.stack([r, g, b], axis=2)
-                    frame_img = Image.fromarray(rgb_arr, 'RGB')
+            # 2. Time-Keeping Management Tick
+            now_utc = datetime.now(timezone.utc)
+            if now_utc.minute != last_minute:
+                last_minute = now_utc.minute
+                with _state_lock:
+                    offset_str = time_offset_str
+                try:
+                    total_minutes = int(offset_str)
+                    target_time = now_utc + timedelta(minutes=total_minutes)
+                except (ValueError, TypeError):
+                    target_time = now_utc
 
-                    draw = ImageDraw.Draw(frame_img)
-                    bbox = draw.textbbox((0, 0), time_str, font=_font)
-                    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-                    text_zone_height = FB_HEIGHT // 3
-                    draw.text(((FB_WIDTH - tw) // 2,
-                               (text_zone_height - th) // 2 + (th * 3)),
-                              time_str, font=_font, fill=TEXT_COLOR)
+                now_est = datetime.now(ZoneInfo("America/New_York"))
+                est_time_str = now_est.strftime('%I:%M %p')
+                dest_time_str = target_time.strftime('%I:%M %p')
+                
+                # Render ONLY the changed clock sub-segment string to byte format
+                clock_bytes_cache = _render_clock_strip_bytes(est_time_str, dest_time_str)
 
-                    arr2 = np.asarray(frame_img)
-                    r2 = arr2[:, :, 0].astype(np.uint16)
-                    g2 = arr2[:, :, 1].astype(np.uint16)
-                    b2 = arr2[:, :, 2].astype(np.uint16)
-                    rgb565 = ((r2 & 0xF8) << 8) | ((g2 & 0xFC) << 3) | (b2 >> 3)
-                    _cached_clock_frame = rgb565.astype('<u2').tobytes()
-
+            # 3. Blazing Fast Rendering Action Step
+            # No canvas painting, no array formatting math, completely native.
+            n = len(cached_raw_frames)
+            if n > 0:
+                idx = frame_idx % n
+                
+                # Access bytearray buffer pointer directly
+                display_buffer = cached_raw_frames[idx]
+                
+                # Splice in the pre-calculated clock segment instantly via fast byte memory assignment
+                display_buffer[CLOCK_START_BYTE:CLOCK_END_BYTE] = clock_bytes_cache
+                
+                # Flush the stream out to file descriptor pipeline
                 fb.seek(0)
-                fb.write(_cached_clock_frame)
+                fb.write(display_buffer)
                 fb.flush()
 
                 if is_spinning.is_set():
-                    with _frame_lock:
-                        _frame_idx = (idx + 1) % n
-            else:
-                if _bg_array is not None:
-                    with _bg_lock:
-                        bg = _bg_array
-                    r = bg[:, :, 0].astype(np.uint16)
-                    g = bg[:, :, 1].astype(np.uint16)
-                    b = bg[:, :, 2].astype(np.uint16)
-                    rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
-                    fb.seek(0)
-                    fb.write(rgb565.astype('<u2').tobytes())
-                    fb.flush()
+                    frame_idx = (idx + 1) % n
 
-            elapsed = time.time() - start
+            # High precision tracking ticks
+            elapsed = time.time() - start_time
             sleep_time = frame_delay - elapsed
             if sleep_time > 0:
                 time.sleep(sleep_time)
+
     except Exception as e:
-        print("Error in display loop:", e, flush=True)
+        print("Error encountered in optimized display execution loop:", e, flush=True)
     finally:
         fb.seek(0)
         fb.write(bytes(FB_WIDTH * FB_HEIGHT * 2))
         fb.flush()
         fb.close()
-        print("Display loop stopped, screen cleared.", flush=True)
-
+        print("Display loop stopped safely, hardware screen cleared.", flush=True)
 
 def start_display():
-    global _display_thread, _font
+    global _display_thread
     if _display_running.is_set():
         return
-    _font = load_font(12)
     _display_running.set()
     _display_thread = threading.Thread(target=_display_loop, daemon=True)
     _display_thread.start()
@@ -273,5 +248,4 @@ def start_spin():
     is_spinning.set()
 
 def stop_spin():
-    # frame_idx is module-level, so it's already at the exact right frame right now
     is_spinning.clear()
