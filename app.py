@@ -6,6 +6,10 @@ import vlc
 import time
 from draw_screen import start_display, start_spin, stop_spin, set_text, set_gif
 import json
+import asyncio  
+import httpx 
+from shazamio import Shazam 
+
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
 current_player = None
@@ -17,10 +21,48 @@ saved_radio_stations = []
 
 """ HELPER FUNCTIONS """
 
+async def get_song_name(current_link, station_name, station_country, time_offset ):
 
 
+# 128kbps stream = ~16,000 bytes per second. 10 seconds ≈ 160,000 bytes.
+    CHUNK_SIZE = 160000
 
+    shazam = Shazam()
 
+    print("Connecting to live radio stream...")
+    async with httpx.AsyncClient(follow_redirects=True) as client:
+        async with client.stream("GET", current_link) as response:
+            print("Listening to stream (capturing 10 seconds of audio)...")
+
+            audio_bytes = b""
+            async for chunk in response.aiter_bytes():
+                audio_bytes += chunk
+                print(f"Captured {len(audio_bytes)} / {CHUNK_SIZE} bytes...", end="\r")
+
+                if len(audio_bytes) >= CHUNK_SIZE:
+                    audio_bytes = audio_bytes[:CHUNK_SIZE]
+                    break
+
+            print(f"\nCaptured complete chunk ({len(audio_bytes)} bytes).")
+
+            if len(audio_bytes) < 50000:
+                print("❌ Error: Stream closed early. Did not collect enough data.")
+                return
+
+            print("Analyzing audio bytes with Shazam...")
+            try:
+                result = await shazam.recognize(audio_bytes)
+                if result and 'track' in result:
+                    track_title = result['track']['title']
+                    artist = result['track']['subtitle']
+                    
+                    set_text(track_title + " : " + artist or "Now Playing", station_country or "", time_offset or 0)
+
+                else:
+                    print("❌ Match not found. The song might not be in Shazam's database.")
+            except Exception as e:
+                print(f"❌ Recognition Error: {e}")
+    
 
 def get_stations(loc_id):
     """
@@ -118,11 +160,23 @@ def play(url, station_name=None, station_country=None, time_offset=None, album_a
         set_text(station_name or "Now Playing", station_country or "", time_offset or 0)
         start_spin()
 
+        last_call = time.time()
         while not stop_flag.is_set():
             time.sleep(0.1)
+            #asyncio.run(get_song_name(url))
             state = player.get_state()
             if state in [vlc.State.Ended, vlc.State.Error]:
                 break
+
+            now = time.time()
+            if now - last_call >= 20:
+                asyncio.run(get_song_name(url, station_name, station_country, time_offset))
+                last_call = now
+
+
+
+
+
     except Exception as e:
         print("Error in play():", e)
     finally:
