@@ -9,6 +9,7 @@ import json
 import asyncio  
 import httpx 
 from shazamio import Shazam 
+import tempfile
 
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
@@ -20,55 +21,66 @@ found_radio_stations = []
 saved_radio_stations = []
 
 """ HELPER FUNCTIONS """
-
-def call_song_recognition(current_link, station_name, station_country, time_offset):
+def call_song_recognition(resolved_url, temp_audio, station_name, station_country, time_offset):
     global song_recognition_cancel
-    song_recognition_cancel.set()   # cancel any running thread
-    song_recognition_cancel = threading.Event()  # fresh flag for new thread
+    song_recognition_cancel.set()  # signals the OLD thread's cancel_flag
+    song_recognition_cancel = threading.Event()  # new flag for new thread
     t = threading.Thread(
         target=get_song_name,
-        args=(current_link, station_name, station_country, time_offset, song_recognition_cancel),
+        args=(resolved_url, temp_audio, station_name, station_country, time_offset, song_recognition_cancel),
         daemon=True
     )
     t.start()
 
-
-
 song_recognition_cancel = threading.Event()
 
-def get_song_name(current_link, station_name, station_country, time_offset, cancel_flag):
-    CHUNK_SIZE = 80000
+import subprocess
+
+def get_song_name(resolved_url, temp_audio, station_name, station_country, time_offset, cancel_flag):
     shazam = Shazam()
-    print("Connecting to live radio stream...")
+    print("Capturing audio via ffmpeg...")
     try:
-        with requests.get(current_link, stream=True, allow_redirects=True, timeout=30) as response:
-            print("Listening to stream (capturing 10 seconds of audio)...")
-            audio_bytes = b""
-            for chunk in response.iter_content(chunk_size=4096):
-                if cancel_flag.is_set():
-                    print("Song recognition cancelled.")
-                    return
-                if chunk:
-                    audio_bytes += chunk
-                    print(f"Captured {len(audio_bytes)} / {CHUNK_SIZE} bytes...", end="\r")
-                    if len(audio_bytes) >= CHUNK_SIZE:
-                        audio_bytes = audio_bytes[:CHUNK_SIZE]
-                        break
-            if len(audio_bytes) < 50000:
-                print("Error: Stream closed early. Did not collect enough data.")
+        proc = subprocess.Popen(
+            ['ffmpeg', '-y', '-i', resolved_url, '-t', '10', '-acodec', 'copy', temp_audio],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        # wait for ffmpeg, but bail if cancelled
+       
+        while proc.poll() is None:
+            if cancel_flag.is_set():
+                proc.kill()
+                proc.wait()  # make sure it's actually dead
+                print("Song recognition cancelled.")
                 return
-            try:
-                result = asyncio.run(shazam.recognize(audio_bytes))
-                if result and 'track' in result:
-                    track_title = result['track']['title']
-                    artist = result['track']['subtitle']
-                    set_text(station_name or "Now Playing", station_country or "", time_offset or 0, track_title, artist)
-                else:
-                    print("Match not found. The song might not be in Shazam's database.")
-            except Exception as e:
-                print(f"Recognition Error: {e}")
+            time.sleep(0.2)
+
+# check again after ffmpeg exits naturally
+        if cancel_flag.is_set():
+            return
+
+ 
+        if not os.path.exists(temp_audio) or os.path.getsize(temp_audio) < 50000:
+            print("Error: ffmpeg didn't capture enough audio.")
+            return
+
+        with open(temp_audio, 'rb') as f:
+            audio_bytes = f.read()
+
+        result = asyncio.run(shazam.recognize(audio_bytes))
+        if result and 'track' in result:
+            track_title = result['track']['title']
+            artist = result['track']['subtitle']
+            print(f"Found: {artist} - {track_title}")
+            set_text(station_name or "Now Playing", station_country or "", time_offset or 0, track_title, artist)
+        else:
+            print("Match not found.")
     except Exception as e:
-        print(f"Stream Error: {e}") 
+        print(f"Recognition Error: {e}")
+    finally:
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
+
 
 def get_stations(loc_id):
     """
@@ -147,47 +159,64 @@ def _find_geo(json_obj, target_geo):
 def play(url, station_name=None, station_country=None, time_offset=None, album_art_path="uploads/vinyl.gif"):
     """
         Plays the requested song
-        Spawns player instance 
-       
+        Spawns player instance
     """
     global current_player
     stop_flag.clear()
+    temp_audio = tempfile.mktemp(suffix=".mp3")
     try:
         resp = requests.get(url, allow_redirects=True, timeout=10, stream=True)
         resolved_url = resp.url
         resp.close()
         print(f"Resolved stream URL: {resolved_url}")
-        instance = vlc.Instance('--aout=alsa')
+        instance = vlc.Instance(
+            '--aout=alsa',
+            f'--sout=#duplicate{{dst=file{{dst={temp_audio}}},dst=display}}',
+            '--sout-keep'
+        )
         player = instance.media_player_new()
         current_player = player
         player.set_mrl(resolved_url)
         player.play()
+        time.sleep(2)
+        print(f"Temp file exists: {os.path.exists(temp_audio)}, size: {os.path.getsize(temp_audio) if os.path.exists(temp_audio) else 0}")
 
-        set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unkown", "Unknown")
+
+
+        set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unknown", "Unknown")
         start_spin()
-
         last_call = time.time() - 20  # trigger immediately
         while not stop_flag.is_set():
             time.sleep(0.1)
             state = player.get_state()
             if state in [vlc.State.Ended, vlc.State.Error]:
                 break
-
             now = time.time()
+
             if now - last_call >= 20:
-                call_song_recognition(resolved_url, station_name, station_country, time_offset)
+                temp_audio = tempfile.mktemp(suffix=".mp3")
+                call_song_recognition(resolved_url, temp_audio, station_name, station_country, time_offset)
                 last_call = now
 
+
+
+
+
+
+
+
+        
     except Exception as e:
         print("Error in play():", e)
     finally:
-        song_recognition_cancel.set()  # cancel any in-flight recognition
+        song_recognition_cancel.set()
         stop_spin()
         set_text("Nothing Playing", "No Country", 0, "Unknown", "Unknown")
         if current_player:
             current_player.stop()
         current_player = None
-
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
 
 def write_json(new_data, filename):
     
