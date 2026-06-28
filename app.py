@@ -25,30 +25,28 @@ found_radio_stations = []
 saved_radio_stations = []
 
 # Global variables
-SHAZAM_CHUNK_SIZE = 100000
+SHAZAM_CHUNK_SIZE = 80000
 SHAZAM_CHECK_INTERVAL = 20
 SHAZAM_UNKNOWN_COUNTER = 0
 
 
 """ HELPER FUNCTIONS """
 
+# Global tracking variables for the active station session
+current_station_url = None
+failed_match_count = 0
+counter_lock = threading.Lock()
+
 def call_song_recognition(resolved_url, station_name, station_country, time_offset):
-    """
-    Manages background process lifecycle by resetting execution states and 
-    spawning an independent thread context for data collection.
-
-    Parameters:
-        resolved_url (str): Verified final endpoint address of the media source.
-        station_name (str): Label identifier for the active source.
-        station_country (str): Geographic origin metadata.
-        time_offset (int): Temporal variance value relative to UTC.
-
-    Returns:
-        None
-    """
-    global song_recognition_cancel
-    song_recognition_cancel.set()  # Cancel previous task if running
+    global song_recognition_cancel, current_station_url, failed_match_count
+    
+    song_recognition_cancel.set()  
     song_recognition_cancel = threading.Event()
+    
+    with counter_lock:
+        if current_station_url != resolved_url:
+            current_station_url = resolved_url
+            failed_match_count = 0
     
     t = threading.Thread(
         target=get_song_name,
@@ -58,22 +56,8 @@ def call_song_recognition(resolved_url, station_name, station_country, time_offs
     t.start()
 
 def get_song_name(resolved_url, station_name, station_country, time_offset, cancel_flag):
-    """
-    Connects to an external stream pool, reads a fixed block of data into memory, 
-    and passes the payload to an analysis service.
+    global failed_match_count
 
-    Parameters:
-        resolved_url (str): Verified final endpoint address of the media source.
-        station_name (str): Label identifier for the active source.
-        station_country (str): Geographic origin metadata.
-        time_offset (int): Temporal variance value relative to UTC.
-        cancel_flag (threading.Event): Flow control indicator to stop background execution.
-
-    Returns:
-        None
-    """
-
-    global SHAZAM_UNKNOWN_COUNTER
     try:
         os.nice(19)
     except:
@@ -82,56 +66,57 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
     if cancel_flag.is_set() or stop_flag.is_set():
         return
 
+    # Bumped to 3.0s to ensure slower CDN stream buffers fully clear their old cache
+    time.sleep(3.0)
+
+    # CRITICAL GUARD: Check if the station was changed or stopped while we were sleeping
+    if cancel_flag.is_set() or stop_flag.is_set():
+        return
+
     CHUNK_SIZE = SHAZAM_CHUNK_SIZE
+    audio_bytes = b""
 
-    async def _async_worker():
-        shazam = Shazam()
-        audio_bytes = b""
-        
-        try:
-            limits = httpx.Limits(max_keepalive_connections=1, max_connections=1)
-            async with httpx.AsyncClient(follow_redirects=True, timeout=5.0, limits=limits) as client:
-                async with client.stream("GET", resolved_url) as response:
-                    
-                    async for chunk in response.aiter_bytes():
-                        if cancel_flag.is_set() or stop_flag.is_set():
-                            return "CANCELLED"
-                            
-                        audio_bytes += chunk
-                        
-                        if len(audio_bytes) >= CHUNK_SIZE:
-                            audio_bytes = audio_bytes[:CHUNK_SIZE]
-                            break
-            
-            if cancel_flag.is_set() or stop_flag.is_set():
-                return "CANCELLED"
-
-            if len(audio_bytes) < 50000:
-                return None
-
-            return await shazam.recognize(audio_bytes)
-            
-        except Exception as e:
-            print(f"Stream collection interrupted: {e}" , flush=True)
-            return None
     try:
+        limits = httpx.Limits(max_keepalive_connections=1, max_connections=1)
+        with httpx.Client(follow_redirects=True, timeout=5.0, limits=limits) as client:
+            # Check again right before opening the stream connection
+            if cancel_flag.is_set() or stop_flag.is_set():
+                return
+                
+            with client.stream("GET", resolved_url) as response:
+                first_chunk = True
+                for chunk in response.iter_bytes():
+                    if cancel_flag.is_set() or stop_flag.is_set():
+                        return
+
+                    if first_chunk:
+                        first_chunk = False
+                        continue
+
+                    audio_bytes += chunk
+                    if len(audio_bytes) >= CHUNK_SIZE:
+                        break
+    except Exception as e:
+        if cancel_flag.is_set() or stop_flag.is_set():
+            return
+        print(f"Stream collection interrupted: {e}", flush=True)
+        return
+
+
+    if cancel_flag.is_set() or stop_flag.is_set() or len(audio_bytes) < 50000:
+        return
+
+    try:
+        shazam = Shazam()
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-
-        result = loop.run_until_complete(_async_worker())
         
-        # --- CLEAN UP PENDING TASKS TO STOP THE WARNINGS ---
-        pending = asyncio.all_tasks(loop)
-        for task in pending:
-            task.cancel()  # Signal cancellation to trailing tasks
-            
-        if pending:
-            # Give the loop a split second to process the cancellations safely
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-            
-        loop.close()
+        try:
+            result = loop.run_until_complete(shazam.recognize(audio_bytes))
+        finally:
+            loop.close()
 
-        if result == "CANCELLED" or cancel_flag.is_set() or stop_flag.is_set():
+        if cancel_flag.is_set() or stop_flag.is_set():
             return
 
         if result and 'track' in result:
@@ -139,18 +124,20 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
             artist = result['track']['subtitle']
             print(f"Found: {artist} - {track_title}", flush=True)
             set_text(station_name or "Now Playing", station_country or "", time_offset or 0, track_title, artist)
-            SHAZAM_UNKNOWN_COUNTER = 0
+            
+            with counter_lock:
+                failed_match_count = 0  
         else:
-            if SHAZAM_UNKNOWN_COUNTER >= 2: # after retries
-                print("Match not found.", flush=True)
-                set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unknown Track", "Unknown Artist")
-            else: # retry 
-                SHAZAM_UNKNOWN_COUNTER += 1
-                print(f"Retrying song name fetch... {SHAZAM_UNKNOWN_COUNTER}", flush=True)
-
+            with counter_lock:
+                failed_match_count += 1
+                if failed_match_count >= 3:
+                    print("Match not found. Max retries exceeded.", flush=True)
+                    set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unknown Track", "Unknown Artist")
+                else:
+                    print(f"Match not found. Retrying song name fetch... (Attempt {failed_match_count}/3)", flush=True)
+                    
     except Exception as e:
-        print(f"Recognition Engine Fault: {e}")
-
+        print(f"Recognition Engine Fault: {e}", flush=True)
 
 
 def get_stations(loc_id):
@@ -249,14 +236,22 @@ def play(url, station_name=None, station_country=None, time_offset=None):
 
         while not stop_flag.is_set():
             time.sleep(0.5)
+            
+            # Check if stop was requested during the sleep window
+            if stop_flag.is_set():
+                break
+
             state = player.get_state()
             if state in [vlc.State.Ended, vlc.State.Error]:
                 break
-                
+
             now = time.time()
             if now - last_call >= SHAZAM_CHECK_INTERVAL: # 30 second analysis interval window
-                call_song_recognition(resolved_url, station_name, station_country, time_offset)
-                last_call = now
+                # One last safety check before spinning up a new thread
+                if not stop_flag.is_set():
+                    call_song_recognition(resolved_url, station_name, station_country, time_offset)
+                last_call = now        
+
 
     except Exception as e:
         print("Error in play():", e)
