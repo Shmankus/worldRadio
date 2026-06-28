@@ -25,8 +25,10 @@ found_radio_stations = []
 saved_radio_stations = []
 
 # Global variables
-SHAZAM_CHUNK_SIZE = 80000
-SHAZAM_CHECK_INTERVAL = 15
+SHAZAM_CHUNK_SIZE = 100000
+SHAZAM_CHECK_INTERVAL = 20
+SHAZAM_UNKNOWN_COUNTER = 0
+
 
 """ HELPER FUNCTIONS """
 
@@ -71,6 +73,7 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
         None
     """
 
+    global SHAZAM_UNKNOWN_COUNTER
     try:
         os.nice(19)
     except:
@@ -109,14 +112,23 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
             return await shazam.recognize(audio_bytes)
             
         except Exception as e:
-            print(f"Stream collection interrupted: {e}")
+            print(f"Stream collection interrupted: {e}" , flush=True)
             return None
-
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         result = loop.run_until_complete(_async_worker())
+        
+        # --- CLEAN UP PENDING TASKS TO STOP THE WARNINGS ---
+        pending = asyncio.all_tasks(loop)
+        for task in pending:
+            task.cancel()  # Signal cancellation to trailing tasks
+            
+        if pending:
+            # Give the loop a split second to process the cancellations safely
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            
         loop.close()
 
         if result == "CANCELLED" or cancel_flag.is_set() or stop_flag.is_set():
@@ -125,14 +137,21 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
         if result and 'track' in result:
             track_title = result['track']['title']
             artist = result['track']['subtitle']
-            print(f"Found: {artist} - {track_title}")
+            print(f"Found: {artist} - {track_title}", flush=True)
             set_text(station_name or "Now Playing", station_country or "", time_offset or 0, track_title, artist)
+            SHAZAM_UNKNOWN_COUNTER = 0
         else:
-            print("Match not found.")
-            set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unknown Track", "Unknown Artist")
-            
+            if SHAZAM_UNKNOWN_COUNTER >= 2: # after retries
+                print("Match not found.", flush=True)
+                set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unknown Track", "Unknown Artist")
+            else: # retry 
+                SHAZAM_UNKNOWN_COUNTER += 1
+                print(f"Retrying song name fetch... {SHAZAM_UNKNOWN_COUNTER}", flush=True)
+
     except Exception as e:
         print(f"Recognition Engine Fault: {e}")
+
+
 
 def get_stations(loc_id):
     """
