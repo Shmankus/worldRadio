@@ -27,7 +27,6 @@ saved_radio_stations = []
 # Global variables
 SHAZAM_CHUNK_SIZE = 80000
 SHAZAM_CHECK_INTERVAL = 20
-SHAZAM_UNKNOWN_COUNTER = 0
 
 
 """ HELPER FUNCTIONS """
@@ -66,10 +65,10 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
     if cancel_flag.is_set() or stop_flag.is_set():
         return
 
-    # Bumped to 3.0s to ensure slower CDN stream buffers fully clear their old cache
+    # 3 second buffer for new station
     time.sleep(3.0)
 
-    # CRITICAL GUARD: Check if the station was changed or stopped while we were sleeping
+    # Check if the station was changed or stopped 
     if cancel_flag.is_set() or stop_flag.is_set():
         return
 
@@ -102,10 +101,11 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
         print(f"Stream collection interrupted: {e}", flush=True)
         return
 
-
+    # check after gathering song bytes
     if cancel_flag.is_set() or stop_flag.is_set() or len(audio_bytes) < 50000:
         return
 
+    # Actual giving shazam sound bytes and recieving the song details
     try:
         shazam = Shazam()
         loop = asyncio.new_event_loop()
@@ -124,9 +124,10 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
             artist = result['track']['subtitle']
             print(f"Found: {artist} - {track_title}", flush=True)
             set_text(station_name or "Now Playing", station_country or "", time_offset or 0, track_title, artist)
-            
+            # erase attempts
             with counter_lock:
                 failed_match_count = 0  
+        # attempt logic
         else:
             with counter_lock:
                 failed_match_count += 1

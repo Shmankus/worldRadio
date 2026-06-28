@@ -35,6 +35,12 @@
             "title": "Listen.moe",
             "country": "Japan\n                        ",
             "utcOffset": "540"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/5JgkmIlQ/channel.mp3",
+            "title": "Radio Potsdam",
+            "country": "Germany\n                        ",
+            "utcOffset": "120"
         }
     ]
 }
