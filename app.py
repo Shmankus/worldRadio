@@ -21,48 +21,54 @@ saved_radio_stations = []
 
 """ HELPER FUNCTIONS """
 
-async def get_song_name(current_link, station_name, station_country, time_offset ):
+def call_song_recognition(current_link, station_name, station_country, time_offset):
+    global song_recognition_cancel
+    song_recognition_cancel.set()   # cancel any running thread
+    song_recognition_cancel = threading.Event()  # fresh flag for new thread
+    t = threading.Thread(
+        target=get_song_name,
+        args=(current_link, station_name, station_country, time_offset, song_recognition_cancel),
+        daemon=True
+    )
+    t.start()
 
 
-# 128kbps stream = ~16,000 bytes per second. 10 seconds ≈ 160,000 bytes.
-    CHUNK_SIZE = 160000
 
+song_recognition_cancel = threading.Event()
+
+def get_song_name(current_link, station_name, station_country, time_offset, cancel_flag):
+    CHUNK_SIZE = 80000
     shazam = Shazam()
-
     print("Connecting to live radio stream...")
-    async with httpx.AsyncClient(follow_redirects=True) as client:
-        async with client.stream("GET", current_link) as response:
+    try:
+        with requests.get(current_link, stream=True, allow_redirects=True, timeout=30) as response:
             print("Listening to stream (capturing 10 seconds of audio)...")
-
             audio_bytes = b""
-            async for chunk in response.aiter_bytes():
-                audio_bytes += chunk
-                print(f"Captured {len(audio_bytes)} / {CHUNK_SIZE} bytes...", end="\r")
-
-                if len(audio_bytes) >= CHUNK_SIZE:
-                    audio_bytes = audio_bytes[:CHUNK_SIZE]
-                    break
-
-            print(f"\nCaptured complete chunk ({len(audio_bytes)} bytes).")
-
+            for chunk in response.iter_content(chunk_size=4096):
+                if cancel_flag.is_set():
+                    print("Song recognition cancelled.")
+                    return
+                if chunk:
+                    audio_bytes += chunk
+                    print(f"Captured {len(audio_bytes)} / {CHUNK_SIZE} bytes...", end="\r")
+                    if len(audio_bytes) >= CHUNK_SIZE:
+                        audio_bytes = audio_bytes[:CHUNK_SIZE]
+                        break
             if len(audio_bytes) < 50000:
-                print("❌ Error: Stream closed early. Did not collect enough data.")
+                print("Error: Stream closed early. Did not collect enough data.")
                 return
-
-            print("Analyzing audio bytes with Shazam...")
             try:
-                result = await shazam.recognize(audio_bytes)
+                result = asyncio.run(shazam.recognize(audio_bytes))
                 if result and 'track' in result:
                     track_title = result['track']['title']
                     artist = result['track']['subtitle']
-                    
-                    set_text(track_title + " : " + artist or "Now Playing", station_country or "", time_offset or 0)
-
+                    set_text(station_name or "Now Playing", station_country or "", time_offset or 0, track_title, artist)
                 else:
-                    print("❌ Match not found. The song might not be in Shazam's database.")
+                    print("Match not found. The song might not be in Shazam's database.")
             except Exception as e:
-                print(f"❌ Recognition Error: {e}")
-    
+                print(f"Recognition Error: {e}")
+    except Exception as e:
+        print(f"Stream Error: {e}") 
 
 def get_stations(loc_id):
     """
@@ -157,35 +163,30 @@ def play(url, station_name=None, station_country=None, time_offset=None, album_a
         player.set_mrl(resolved_url)
         player.play()
 
-        set_text(station_name or "Now Playing", station_country or "", time_offset or 0)
+        set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unkown", "Unknown")
         start_spin()
 
-        last_call = time.time()
+        last_call = time.time() - 20  # trigger immediately
         while not stop_flag.is_set():
             time.sleep(0.1)
-            #asyncio.run(get_song_name(url))
             state = player.get_state()
             if state in [vlc.State.Ended, vlc.State.Error]:
                 break
 
             now = time.time()
             if now - last_call >= 20:
-                asyncio.run(get_song_name(url, station_name, station_country, time_offset))
+                call_song_recognition(resolved_url, station_name, station_country, time_offset)
                 last_call = now
-
-
-
-
 
     except Exception as e:
         print("Error in play():", e)
     finally:
+        song_recognition_cancel.set()  # cancel any in-flight recognition
         stop_spin()
-        set_text("Nothing Playing", "No Country", 0)  # only runs when actually stopping
+        set_text("Nothing Playing", "No Country", 0, "Unknown", "Unknown")
         if current_player:
             current_player.stop()
         current_player = None
-
 
 
 def write_json(new_data, filename):
