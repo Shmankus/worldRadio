@@ -74,31 +74,42 @@ def _rgb_to_rgb565(rgb_array):
     return rgb565.astype('<u2').tobytes()
 
 def _build_static_ui_base(title, country, song, artist):
-    """Generates the static base image background template."""
+    """Generates the static base image background template with vertical track info."""
     canvas = Image.new('RGB', (FB_WIDTH, FB_HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(canvas)
 
+    # Top accent line
     draw.rectangle([0, 0, FB_WIDTH, 4], fill=ACCENT_COLOR)
 
+    # Header / Title Text
     bbox_t = draw.textbbox((0, 0), title, font=font_large)
     draw.text(((FB_WIDTH - (bbox_t[2] - bbox_t[0])) // 2, 12), title, font=font_large, fill=TEXT_MAIN)
 
+    # Country Metadata Text
     bbox_c = draw.textbbox((0, 0), country, font=font_small)
     draw.text(((FB_WIDTH - (bbox_c[2] - bbox_c[0])) // 2, 34), country, font=font_small, fill=TEXT_MUTED)
 
+    # Decorative Border Segments
     draw.line([(20, 56), (FB_WIDTH - 20, 56)], fill=(40, 35, 60), width=1)
-    draw.line([(20, 106), (FB_WIDTH - 20, 106)], fill=(40, 35, 60), width=1)
+    draw.line([(20, 110), (FB_WIDTH - 20, 110)], fill=(40, 35, 60), width=1) # Shifted down slightly for spacing
 
-    full_track_str = f"{song} - {artist}"
-    bbox_track = draw.textbbox((0, 0), full_track_str, font=font_small)
-    track_w = bbox_track[2] - bbox_track[0]
-    
-    if track_w > (FB_WIDTH - 20):
-        full_track_str = full_track_str[:28] + "..."
-        bbox_track = draw.textbbox((0, 0), full_track_str, font=font_small)
-        track_w = bbox_track[2] - bbox_track[0]
+    # --- VERTICAL SONG & ARTIST LAYOUT ---
+    # Max character boundary check to keep text within screen margins
+    if len(song) > 24:
+        song = song[:21] + "..."
+    if len(artist) > 26:
+        artist = artist[:23] + "..."
 
-    draw.text(((FB_WIDTH - track_w) // 2, 114), full_track_str, font=font_small, fill=TEXT_MAIN)
+    # Calculate centered coordinates for Song Name (Row 1)
+    bbox_song = draw.textbbox((0, 0), song, font=font_small)
+    song_w = bbox_song[2] - bbox_song[0]
+    draw.text(((FB_WIDTH - song_w) // 2, 116), song, font=font_small, fill=TEXT_MAIN)
+
+    # Calculate centered coordinates for Artist Name (Row 2)
+    bbox_artist = draw.textbbox((0, 0), artist, font=font_small)
+    artist_w = bbox_artist[2] - bbox_artist[0]
+    draw.text(((FB_WIDTH - artist_w) // 2, 132), artist, font=font_small, fill=TEXT_MUTED)
+
     return canvas
 
 def _render_clock_strip_bytes(est_str, dest_str):
@@ -155,7 +166,7 @@ def _async_asset_loader(title, country, song, artist, gif_path):
     _pending_frames = staging_frames
     _pending_ready.set()
 
-def _display_loop(fps=30):
+def _display_loop(fps=5):
     frame_delay = 1.0 / fps
     last_minute = -1
     frame_idx = 0
