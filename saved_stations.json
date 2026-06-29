@@ -13,16 +13,34 @@
             "utcOffset": "120"
         },
         {
-            "url": "http://radio.garden/api/ara/content/listen/rDtgFwQW/channel.mp3",
-            "title": "Revolucion radio",
-            "country": "United States\n                        ",
-            "utcOffset": -240
-        },
-        {
             "url": "http://radio.garden/api/ara/content/listen/6fNoOGMY/channel.mp3",
             "title": "FM Kahoku 78.8\uff08FM\u304b\u307b\u304f\uff09",
             "country": "Japan\n                        ",
             "utcOffset": "540"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/HS0riUGe/channel.mp3",
+            "title": "radio aktiv",
+            "country": "Germany\n                        ",
+            "utcOffset": "120"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/Dafyh31f/channel.mp3",
+            "title": "Antenne Niedersachsen",
+            "country": "Germany\n                        ",
+            "utcOffset": "120"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/XehO7lZ3/channel.mp3",
+            "title": "Listen.moe",
+            "country": "Japan\n                        ",
+            "utcOffset": "540"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/5JgkmIlQ/channel.mp3",
+            "title": "Radio Potsdam",
+            "country": "Germany\n                        ",
+            "utcOffset": "120"
         }
     ]
 }

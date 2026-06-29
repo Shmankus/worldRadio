@@ -1,0 +1,37 @@
+session_name: world_radio
+windows:
+- focus: 'true'
+  layout: e572,361x95,0,0{181x95,0,0,0,179x95,182,0[179x48,182,0,1,179x46,182,49,4]}
+  options: {}
+  panes:
+  - shell_command:
+    - cd /root
+    - sudo journalctl -u flaskserver.service -f
+  - focus: 'true'
+    shell_command:
+    - cd /root/flaskServer
+  - shell_command:
+    - cd /root
+    - htop
+  window_name: overview
+- layout: cac5,361x95,0,0,8
+  options: {}
+  panes:
+  - focus: 'true'
+    shell_command: bash
+  start_directory: /root/flaskServer
+  window_name: app.py
+- layout: 6590,361x95,0,0,11
+  options: {}
+  panes:
+  - focus: 'true'
+    shell_command: bash
+  start_directory: /root/flaskServer
+  window_name: shazam_helper.py
+- layout: 6592,361x95,0,0,13
+  options: {}
+  panes:
+  - focus: 'true'
+    shell_command: bash
+  start_directory: /root/flaskServer
+  window_name: draw_screen.py
