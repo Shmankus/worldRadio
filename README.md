@@ -91,4 +91,4 @@ The server starts on `http://<IP>:8000` . Open it in a browser on any device on 
 
 - Radio Garden's API is unofficial and undocumented — behavior may change
 - The display engine writes raw RGB565 bytes directly to the framebuffer for performance; no X11 or desktop environment required
-- The `uploads/vinyl.gif` is the default idle/playing animation; swap it out with any GIF via `set_album_art()`
+- The `uploads/vinyl.gif` is the default idle/playing animation; swap it out with any other gif in `uploads` folder
