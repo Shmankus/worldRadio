@@ -1,6 +1,6 @@
 import threading, time, httpx, asyncio
 from shazamio import Shazam
-from draw_screen import start_display, start_spin, stop_spin, set_text, set_gif
+from draw_screen import start_display, start_spin, stop_spin, set_text
 current_station_url = None
 counter_lock = threading.Lock()
 failed_match_count = 0
@@ -113,7 +113,7 @@ def get_song_name(resolved_url, station_name, station_country, time_offset, canc
                     print("Match not found. Max retries exceeded.", flush=True)
                     set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Unknown Track", "Unknown Artist")
                 else:
-                    set_text(station_name or "Now Playing", station_country or "", time_offset or 0, "Refreshing", f"{failed_match_count}/3")
+                    print(f"Retrying shazam: {failed_match_count}/3")
 
     except Exception as e:
         print(f"Recognition Engine Fault: {e}", flush=True)

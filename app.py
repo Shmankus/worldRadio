@@ -9,7 +9,7 @@ import asyncio
 import random
 
 # draw_screen.py
-from draw_screen import start_display, start_spin, stop_spin, set_text, set_gif
+from draw_screen import start_display, start_spin, stop_spin, set_text
 
 # Needed for Shazam
 from shazam_helper import call_song_recognition, get_song_name
@@ -133,7 +133,7 @@ def play(url, station_name=None, station_country=None, time_offset=None):
             state = player.get_state()
             if state in [vlc.State.Ended, vlc.State.Error]:
                 break
-            
+             
             now = time.time()
             if now - last_call >= SHAZAM_CHECK_INTERVAL: # 30 second analysis interval window
                 # One last safety check before spinning up a new thread
@@ -309,5 +309,4 @@ def remove_from_saved():
 
 if __name__ == "__main__":
     start_display()
-    set_gif("uploads/vinyl.gif")
     app.run(host='0.0.0.0', port=8000, debug=False, use_reloader=False)
