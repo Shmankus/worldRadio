@@ -2,7 +2,7 @@
 
 A Raspberry Pi internet radio player powered by the [Radio Garden](https://radio.garden) API, with a web-based control interface and a live display on a PiTFT touchscreen.
 
-<img width="1512" height="2016" alt="world_radio" src="https://github.com/user-attachments/assets/f9b30529-24ca-400e-848a-786e0299902f" />
+<img width="756" height="1008" alt="world_radio" src="https://github.com/user-attachments/assets/f9b30529-24ca-400e-848a-786e0299902f" />
 
 ## Features
 
