@@ -2,6 +2,8 @@
 
 A Raspberry Pi internet radio player powered by the [Radio Garden](https://radio.garden) API, with a web-based control interface and a live display on a PiTFT touchscreen.
 
+<img width="3024" height="4032" alt="world_radio" src="https://github.com/user-attachments/assets/f9b30529-24ca-400e-848a-786e0299902f" />
+
 ## Features
 
 - **Location-based station discovery** — search for radio stations by latitude/longitude, finding the nearest broadcast cluster via the Radio Garden API
@@ -23,6 +25,7 @@ A Raspberry Pi internet radio player powered by the [Radio Garden](https://radio
 worldRadio/
 ├── app.py               # Flask server — API routes, VLC playback, station logic
 ├── draw_screen.py       # Framebuffer display engine — GIF animation, text rendering, RGB565 output
+├── shazam_helper.py     # Shazam song byte recording to get song name and artist
 ├── saved_stations.json  # Persisted list of saved stations
 ├── templates/           # Frontend HTML/JS/CSS
 ├── uploads/             # Album art / GIF assets (e.g. vinyl.gif)
@@ -42,6 +45,9 @@ worldRadio/
 2. Renders frames as RGB565 and writes them directly to `/dev/fb1` at ~24fps
 3. Displays a live clock adjusted to the playing station's UTC offset
 4. Animates the vinyl GIF while a station is playing; freezes on the current frame when stopped
+
+`shazam_helper.py` gets called by `app.py` on interval to grab current song info
+
 
 ## Setup
 
