@@ -1,14 +1,30 @@
 import threading, time, httpx, asyncio
 from shazamio import Shazam
 from draw_screen import start_display, start_spin, stop_spin, set_text
+
+
+# Global states
 current_station_url = None
 counter_lock = threading.Lock()
+
+# Global variables
 failed_match_count = 0
-
-
 SHAZAM_CHUNK_SIZE = 80000
 
 def call_song_recognition(stop_flag,song_recognition_cancel, resolved_url, station_name, station_country, time_offset):
+    """
+        Summons a thread that calls `get_song_name`
+        
+        params: 
+            stop_flag : threading event that calls a stop when the song switches
+            song_recognition_cancel : threading event that calls a stop when the song switches
+            resolved_url : the used url for the song stream
+            station_name : name of station
+            station_country : country of station
+            time_offset : utc time offset in minutes
+
+
+    """
     global current_station_url, failed_match_count
 
     song_recognition_cancel.set()
@@ -27,14 +43,18 @@ def call_song_recognition(stop_flag,song_recognition_cancel, resolved_url, stati
     t.start()
 
 def get_song_name(resolved_url, station_name, station_country, time_offset, cancel_flag, stop_flag):
+    """
+        gets the song name and artist
+        
+        params:
+            resolved_url : the used url for the song stream
+            station_name : name of station
+            station_country : country of station
+            time_offset : utc time offset in minutes
+            cancel_flag : threading event for shazam stop
+            stop_flag : threading event for song stop        
+    """
     global failed_match_count
-  
-
-    try:
-        os.nice(19)
-    except:
-        pass
-
     if cancel_flag.is_set() or stop_flag.is_set():
         print("Shazam thread killed", flush=True)
         return

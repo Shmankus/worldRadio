@@ -41,6 +41,12 @@
             "title": "Radio Potsdam",
             "country": "Germany\n                        ",
             "utcOffset": "120"
+        },
+        {
+            "url": "http://radio.garden/api/ara/content/listen/agGPOrdP/channel.mp3",
+            "title": "AshiyaRadio\u301c\u30a2\u30b7\u30e4\u30fb\u30e9\u30c2\u30f2\u301c",
+            "country": "Japan\n                        ",
+            "utcOffset": "540"
         }
     ]
 }
