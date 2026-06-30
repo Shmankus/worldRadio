@@ -33,8 +33,10 @@ country_text = "No Country"
 time_offset_str = "0"
 song_name = "Unknown"
 artist_name = "Unknown"
+_text_overlay_bytes = None  # RGB565 bytes of just the text stri:p
+_base_gif_frames = []  # list of bytearray, only the GIF portion (y=150 to y=320)
 
-
+# Tries to load custom font
 def load_font(size=12):
     try:
         return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
@@ -50,6 +52,16 @@ _last_dest_str = ""
 
 
 def set_text(new_title, new_country, new_timeOffset, new_song_name, new_artist_name):
+    """
+        Sets the text on the display
+
+        params:
+            new_title : station title
+            new_country : station country
+            new_timeOffset : station goecoord utc time offset
+            new_song_name : song name discovered from shazam
+            new_artist_name : song artist discovered from shazam
+    """
     global title_text, country_text, time_offset_str, song_name, artist_name, _text_overlay_bytes, _last_est_str, _last_dest_str
     with _state_lock:
         title_text = " ".join(new_title.strip().split()) if new_title else "Nothing Playing"
@@ -74,10 +86,19 @@ def set_text(new_title, new_country, new_timeOffset, new_song_name, new_artist_n
         )
 
 
-# Add this global
-_text_overlay_bytes = None  # RGB565 bytes of just the text strip
-
 def _render_text_overlay(title, country, song, artist, est_str="", dest_str=""):
+    """
+        Renders the text on the screen
+
+        params:
+            title : station title
+            country : station country
+            song : name of song
+            artist : song's artist
+            est_str : time in eastern time zone
+            dest_str : relative time in station's timezone
+    
+    """
     TEXT_STRIP_H = 150
     canvas = Image.new('RGB', (FB_WIDTH, TEXT_STRIP_H), BG_COLOR)
     draw = ImageDraw.Draw(canvas)
@@ -115,12 +136,17 @@ def _render_text_overlay(title, country, song, artist, est_str="", dest_str=""):
 
 
 
-_base_gif_frames = []  # list of bytearray, only the GIF portion (y=150 to y=320)
-
 GIF_REGION_Y = 150
 GIF_REGION_BYTES = (FB_HEIGHT - GIF_REGION_Y) * FB_WIDTH * 2
 
 def _preload_gif(gif_path="uploads/vinyl2.gif"):
+    """
+        Preloads the gif frames once at display start
+
+        params:
+            gif_path : hard coded path
+    
+    """
     global _base_gif_frames
     staging = []
 
@@ -159,6 +185,12 @@ TEXT_STRIP_H = 150
 TEXT_STRIP_BYTES = TEXT_STRIP_H * FB_WIDTH * 2
 
 def _display_loop(fps=5):
+    """
+        main display loop that updates at certain fps
+
+        params:
+            fps : hard coded frames per second
+    """
     frame_delay = 1.0 / fps
     last_minute = -1
     frame_idx = 0
@@ -196,8 +228,6 @@ def _display_loop(fps=5):
                         est_time_str, dest_time_str
                     )
 
-
-
             # 2. Blit
             n = len(_base_gif_frames)
             if n > 0:
@@ -233,6 +263,7 @@ def _display_loop(fps=5):
 
 
 def start_display():
+    """ Starts the display lifetime """
     global _display_thread
     if _display_running.is_set():
         return
@@ -242,6 +273,7 @@ def start_display():
     _display_thread.start()
 
 def stop_display():
+    """ Kills the display """
     _display_running.clear()
     if _display_thread:
         _display_thread.join(timeout=2)

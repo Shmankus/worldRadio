@@ -16,6 +16,7 @@ from shazam_helper import call_song_recognition, get_song_name
 
 app = Flask(__name__, static_folder='templates', static_url_path='')
 
+# Checks for when station logic needs to stop
 current_player = None
 stop_flag = threading.Event()
 song_recognition_cancel = threading.Event()
@@ -31,8 +32,10 @@ SHAZAM_CHECK_INTERVAL = 20
 
 def get_stations(loc_id):
     """
-        Gets all of the stations through a fetch to the radio garden API
+        Gets all of the stations given the geocoord loc_id 
     
+        params:
+            loc_id : ID from json that ties it to geocoords
         
         returns:
             radio_json : list of stations
@@ -63,9 +66,18 @@ def get_stations(loc_id):
     return radio_json
 
 def _geo_distance(geo1, geo2):
+    """ Distance of two coordinates """
     return math.hypot(geo1[0] - geo2[0], geo1[1] - geo2[1])
 
 def _collect_candidates(json_obj, candidates):
+    """
+        Collects all candidates in JSON to find the shortest distance from requested coords
+
+        params:
+            json_obj : full json 
+            candidates : current set of candidate nested objects
+
+    """
     if isinstance(json_obj, dict):
         if "geo" in json_obj and "id" in json_obj:
             candidates.append((json_obj["id"], json_obj["geo"]))
@@ -77,10 +89,13 @@ def _collect_candidates(json_obj, candidates):
 
 def _find_geo(json_obj, target_geo):
     """
-        gets min distance of all candidates
-        
+        gets min distance of all candidates and returns the loc_id
+
+        params:
+            json_obj : full json object from API
+            target_geo : requested geocoords
         returns:
-            best candidate
+            best candidate loc_id
     """
     candidates = []
     _collect_candidates(json_obj, candidates)
@@ -111,7 +126,7 @@ def play(url, station_name=None, station_country=None, time_offset=None):
             resolved_url = resp.url
         
         print(f"Resolved Stream: {resolved_url}")
-        
+        # plays current stream
         instance = vlc.Instance('--aout=alsa')
         player = instance.media_player_new()
         current_player = player
@@ -135,8 +150,8 @@ def play(url, station_name=None, station_country=None, time_offset=None):
                 break
              
             now = time.time()
-            if now - last_call >= SHAZAM_CHECK_INTERVAL: # 30 second analysis interval window
-                # One last safety check before spinning up a new thread
+            if now - last_call >= SHAZAM_CHECK_INTERVAL: # 30 second shazam check interval
+                # last stop check
                 if not stop_flag.is_set():
                     call_song_recognition(stop_flag,song_recognition_cancel, resolved_url, station_name, station_country, time_offset)
                 last_call = now        
@@ -215,7 +230,7 @@ def play_station():
     """
     stop_station()
     data = request.get_json() or {}
-    time.sleep(1)
+    time.sleep(1) # fixes async issue with shazam ???
     radio_thread = threading.Thread(
         target=play,
         daemon=True,

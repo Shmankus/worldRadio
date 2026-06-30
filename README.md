@@ -1,6 +1,8 @@
 # worldRadio 🌍📻
 
-A Raspberry Pi internet radio player powered by the [Radio Garden](https://radio.garden) API, with a web-based control interface and a live display on a PiTFT touchscreen.
+A Raspberry Pi internet radio player powered by the [Radio Garden](https://radio.garden) API, Shazamio powered song identifier, with a web-based control interface and a live display on a PiTFT screen.
+
+<img width="403" height="504" alt="world_radio" src="https://github.com/user-attachments/assets/f9b30529-24ca-400e-848a-786e0299902f" />
 
 ## Features
 
@@ -10,7 +12,8 @@ A Raspberry Pi internet radio player powered by the [Radio Garden](https://radio
 - **Web UI** — browser-accessible interface served on port 8000 for browsing, playing, and managing stations
 - **PiTFT display** (`/dev/fb1`) — shows station name, country, and local time for the station's timezone, with an animated spinning vinyl GIF while audio is playing
 - **ALSA audio output** via `python-vlc`, with automatic stream URL resolution before playback
-
+- **Shazam song identifier** via shazamio, which updates the screen with correct information 
+ 
 ## Hardware
 
 - Raspberry Pi 1 Model B (or similar)
@@ -23,10 +26,10 @@ A Raspberry Pi internet radio player powered by the [Radio Garden](https://radio
 worldRadio/
 ├── app.py               # Flask server — API routes, VLC playback, station logic
 ├── draw_screen.py       # Framebuffer display engine — GIF animation, text rendering, RGB565 output
+├── shazam_helper.py     # Shazam song byte recording to get song name and artist
 ├── saved_stations.json  # Persisted list of saved stations
 ├── templates/           # Frontend HTML/JS/CSS
-├── uploads/             # Album art / GIF assets (e.g. vinyl.gif)
-└── todo.txt             # Notes and future plans
+└── uploads/             # Album art / GIF assets (e.g. vinyl.gif)
 ```
 
 ## How It Works
@@ -42,6 +45,13 @@ worldRadio/
 2. Renders frames as RGB565 and writes them directly to `/dev/fb1` at ~24fps
 3. Displays a live clock adjusted to the playing station's UTC offset
 4. Animates the vinyl GIF while a station is playing; freezes on the current frame when stopped
+
+`shazam_helper.py` gets called by `app.py` on interval to grab current song info
+1. Spins up new thread
+2. Thread grabs song byte info from URL
+3. Thread then gives byte data to shazamio and grabs the name and artist
+4. Updates the screen using `set_text`
+
 
 ## Setup
 
@@ -63,7 +73,7 @@ sudo apt install vlc
 python app.py
 ```
 
-The server starts on `http://0.0.0.0:8000`. Open it in a browser on any device on your local network. The PiTFT display activates automatically on startup.
+The server starts on `http://<IP>:8000` . Open it in a browser on any device on your local network. The PiTFT display activates automatically on startup.
 
 ## API Endpoints
 
@@ -81,4 +91,4 @@ The server starts on `http://0.0.0.0:8000`. Open it in a browser on any device o
 
 - Radio Garden's API is unofficial and undocumented — behavior may change
 - The display engine writes raw RGB565 bytes directly to the framebuffer for performance; no X11 or desktop environment required
-- The `uploads/vinyl.gif` is the default idle/playing animation; swap it out with any GIF via `set_album_art()`
+- The `uploads/vinyl.gif` is the default idle/playing animation; swap it out with any other gif in `uploads` folder
